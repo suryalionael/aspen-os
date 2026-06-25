@@ -1,0 +1,222 @@
+# Aspen OS — Decision Log
+
+**Purpose:** This document is institutional memory. It captures the major product, architecture, UX, and implementation decisions made during Sprint 1 planning, so future contributors and AI agents don't have to re-derive *why* the system is shaped the way it is, or accidentally re-open a question that was already deliberately settled.
+
+**How to use this log:** Before proposing a structural change (a new table, a new layer, a new interaction model), check here first. If a decision exists, either honor it or explicitly revisit it using the "Future Revisit Conditions" listed — don't silently contradict it.
+
+**Source documents:** [`prd-sprint-1.md`](prd-sprint-1.md) · [`architecture.md`](architecture.md) · [`database-schema.md`](database-schema.md) · [`technical-plan.md`](technical-plan.md) · [`ux-review.md`](ux-review.md) · [`executive-summary.md`](executive-summary.md) · [`pre-implementation-audit.md`](pre-implementation-audit.md) · [`implementation-roadmap.md`](implementation-roadmap.md) · [`build-order.md`](build-order.md) · [`sprint-1-execution-plan.md`](sprint-1-execution-plan.md)
+
+Every entry below documents a decision that was already made and approved somewhere in the above documents — this log introduces no new decisions.
+
+---
+
+## Product & Scope Decisions
+
+### DEC-001 — Workspace-first architecture
+**Decision:** `Workspace` is the top-level container for Sprint 1. There is no entity above it — the data model is `Workspace → Projects → Tasks`.
+**Rationale:** Matches `CLAUDE.md`'s actual MVP feature list, which names "Workspaces" but never "Organizations"; keeps the onboarding path to the minimum number of concepts a first-time nonprofit admin must learn.
+**Alternatives Considered:** `Organization → Workspaces → Projects → Tasks` (Option B in `architecture.md` §2) — modeled real-world nonprofits that might run multiple workspaces under one legal entity.
+**Tradeoffs:** Accepted a future migration cost (adding org-scoping later) in exchange for one fewer onboarding step now and a simpler RLS model today.
+**Owner:** CTO
+**Date:** 2026-06-25 (Sprint 1 planning)
+**Future Revisit Conditions:** Revisit only if real usage data from validated nonprofit pilots shows a genuine need for one entity to manage multiple workspaces — not speculatively.
+
+### DEC-002 — Rejection of the Organization layer
+**Decision:** An `organizations` table and any org-scoping above `workspaces` is explicitly out of scope for Sprint 1.
+**Rationale:** `architecture.md` §2's CTO evaluation found the Organization layer added a mandatory setup step that directly worked against the ≤3-minute time-to-value target (DEC-005), for a need that had not been validated by any user.
+**Alternatives Considered:** Same as DEC-001 (these are two sides of one decision, logged separately for traceability since both were independently flagged as required topics).
+**Tradeoffs:** If multiple-workspace organizations turn out to be common among pilot nonprofits, this will require a later (non-breaking) migration: `workspaces.org_id`, nullable.
+**Owner:** CTO
+**Date:** 2026-06-25
+**Future Revisit Conditions:** Same as DEC-001 — only on validated usage evidence, never preemptively.
+
+### DEC-003 — Rejection of a `task_status` table
+**Decision:** Task status is a constrained `text` column with a check constraint (`backlog` / `todo` / `in_progress` / `done`) on the `tasks` table — not a separate table.
+**Rationale:** The set of statuses is small, fixed, and not user-configurable in Sprint 1; a separate table would be an unnecessary join and an unnecessary abstraction for a value set that doesn't change.
+**Alternatives Considered:** A `task_status` lookup/reference table, allowing user-defined or per-workspace statuses.
+**Tradeoffs:** Expanding or customizing statuses later requires a schema migration *and* a UI rebuild of the fixed-column Kanban board (acknowledged and accepted in `ux-review.md` §8 and `executive-summary.md` §4).
+**Owner:** CTO
+**Date:** 2026-06-25
+**Future Revisit Conditions:** Revisit if/when validated user feedback shows a real need for custom or per-workspace status columns — not before.
+
+### DEC-004 — "My Tasks" / My Work Dashboard deferred to Sprint 2
+**Decision:** No cross-project "My Tasks" view ships in Sprint 1. `tasks.assignee_id` exists in the schema but has no UI in Sprint 1 (see DEC-013).
+**Rationale:** `CLAUDE.md` already lists "My Work Dashboard" as its own distinct MVP feature, separate from Kanban View — building it in Sprint 1 means shipping two roadmap items in one sprint instead of validating one. It was also never part of the user's explicit Sprint 1 goal (sign in → workspace → project → tasks → Kanban).
+**Alternatives Considered:** Building a minimal assignee-filtered view in Sprint 1, given its high daily-use value and low marginal build cost once `assignee_id` exists.
+**Tradeoffs:** Sprint 1 users working across multiple concurrent projects have no single place to see everything assigned to them until Sprint 2.
+**Owner:** Founder/PM, UX Reviewer (joint evaluation, per `prd-sprint-1.md` §6 and `ux-review.md` §7)
+**Date:** 2026-06-25
+**Future Revisit Conditions:** Build it once Sprint 1's core single-project loop is validated with real pilot usage, and once a workspace's typical user is observed running multiple concurrent projects.
+
+### DEC-005 — ≤3-minute Time-to-Value requirement
+**Decision:** A brand-new user must be able to go from sign-in to a created first task in 3 minutes or less, with no guidance. This is a hard design constraint and a release gate (`prd-sprint-1.md` AC-6), not just a metric observed after the fact.
+**Rationale:** Directly mandated as a non-negotiable requirement; it shapes every onboarding/creation flow decision (single-field forms, no forced intermediate steps, no organization layer, no email-confirmation interstitial).
+**Alternatives Considered:** None — this was supplied as a fixed requirement, not a tradeoff to weigh.
+**Tradeoffs:** Every other Sprint 1 decision (DEC-002, DEC-011, DEC-014, DEC-015) was evaluated partly against whether it helps or hurts this target — it has been the single biggest constraint shaping Sprint 1's scope.
+**Owner:** Unified Leadership Team (binding constraint applied across all phases)
+**Date:** 2026-06-25
+**Future Revisit Conditions:** Treat as a release gate per `executive-summary.md` §5 — if internal/pilot testing (per `sprint-1-execution-plan.md` Phase 9) exceeds 3 minutes, fix the flow before production release rather than relaxing the target.
+
+---
+
+## Architecture & Data Model Decisions
+
+### DEC-006 — No dedicated event table in Sprint 1
+**Decision:** Sprint Success Metrics (`prd-sprint-1.md` §7) are computed from existing `created_at`/`updated_at` columns already present on `workspaces`, `projects`, and `tasks` (plus Supabase-managed `auth.users.created_at`) — no new `events` table is created.
+**Rationale:** `implementation-roadmap.md` T52 had left "an events table or existing timestamp columns" as an open implementation choice; `sprint-1-execution-plan.md` Phase 8 resolved it in favor of existing columns specifically because Sprint 1 has no task-edit feature, so `tasks.updated_at` is a safe, unambiguous proxy for "task moved" — adding a new table for this purpose would have been schema growth with no other use.
+**Alternatives Considered:** A dedicated `events` table logging every user action with a timestamp, more flexible for future analytics needs.
+**Tradeoffs:** This approach silently breaks the moment a task-edit feature ships (any edit would also bump `updated_at`, making it a poor "moved" proxy at that point) — flagged explicitly in `sprint-1-execution-plan.md` Phase 8 so a future developer doesn't misread stale metrics logic.
+**Owner:** Product Engineer
+**Date:** 2026-06-25
+**Future Revisit Conditions:** Revisit the moment any task-edit feature is scoped — at that point, either add a dedicated `events` table or a separate `status_changed_at` column, since `updated_at` will no longer cleanly mean "moved."
+
+### DEC-007 — Supabase + Vercel managed-services architecture
+**Decision:** The entire Sprint 1 backend is Supabase (Postgres + Auth + Row Level Security); the entire frontend/hosting is Next.js on Vercel. No custom backend service, no separate API layer.
+**Rationale:** `architecture.md` §1 — keeps Sprint 1 to two moving parts, matching the CTO mandate to prioritize simplicity, maintainability, rapid development, and low cost.
+**Alternatives Considered:** A separate backend service (e.g. a custom REST/GraphQL API), microservices, or an event-driven architecture — all explicitly rejected in `architecture.md` §6 as unnecessary at this scale.
+**Tradeoffs:** Couples the application tightly to Supabase's feature set (Auth, RLS, Postgres) — acceptable given the "prefer managed services" engineering principle and Sprint 1's pilot scale.
+**Owner:** CTO
+**Date:** 2026-06-25
+**Future Revisit Conditions:** Revisit only if Supabase's managed offering becomes a genuine scaling or cost bottleneck after MVP adoption is validated — not preemptively.
+
+### DEC-008 — Server Components + Server Actions, no custom API layer
+**Decision:** All reads happen in Next.js Server Components; all writes happen via Server Actions calling Supabase directly. No REST/GraphQL endpoints are built, and no client-side data-fetching library (React Query, etc.) or global client store is used.
+**Rationale:** `architecture.md` §1 and `technical-plan.md` §5 — sufficient for Sprint 1's scale; client state is scoped only to the Kanban board's optimistic drag-and-drop interaction.
+**Alternatives Considered:** A traditional client-fetched API layer with a global state-management library.
+**Tradeoffs:** Keeps the codebase simple and the dependency list small, at the cost of less flexibility if complex client-side interactivity needs grow significantly beyond the Kanban board.
+**Owner:** CTO, Product Engineer
+**Date:** 2026-06-25
+**Future Revisit Conditions:** Revisit if a future feature genuinely requires client-side state shared across many components — not for the current scope.
+
+### DEC-009 — Row Level Security as the sole authorization layer
+**Decision:** There is no application-level permissions system. All authorization is enforced via Postgres RLS policies, gated on workspace membership (`workspace_members`).
+**Rationale:** `architecture.md` §4 — "RLS is the only authorization layer — there is no application-level permission system to build or maintain," consistent with avoiding premature abstraction.
+**Alternatives Considered:** A separate roles/permissions table and application-layer authorization checks.
+**Tradeoffs:** Simple and centralized, but means every new table added later must repeat the same membership-check policy pattern by hand — there's no shared permissions abstraction to lean on yet.
+**Owner:** CTO
+**Date:** 2026-06-25
+**Future Revisit Conditions:** Revisit if/when role-based permissions (owner vs. member) become load-bearing — see DEC-012, which already anticipates this.
+
+### DEC-010 — `SECURITY DEFINER` RPC for atomic workspace creation
+**Decision:** Workspace creation (workspace row + the creator's membership row) happens atomically inside a single Postgres function, `create_workspace_with_owner`, running as `SECURITY DEFINER`. There is **no** client-facing INSERT policy on `workspace_members` at all.
+**Rationale:** `architecture.md` §5 named the function; `pre-implementation-audit.md` findings S-1 and T-2 identified that without an explicit `SECURITY DEFINER` requirement and an explicit denial of direct client INSERT access, any signed-in user could self-insert membership into any workspace, bypassing RLS intent entirely. `sprint-1-execution-plan.md` Phase 2 made both requirements explicit and testable.
+**Alternatives Considered:** Two separate client-side inserts (workspace, then membership) gated by ordinary RLS INSERT policies.
+**Tradeoffs:** Slightly more setup (one Postgres function, with care taken on its security context) in exchange for closing a critical cross-workspace data-exposure risk.
+**Owner:** CTO
+**Date:** 2026-06-25
+**Future Revisit Conditions:** Re-verify (via `scripts/test-rls.ts`, per DEC-009) any time a new write path to `workspace_members` is considered, e.g. a future invite feature (see DEC-011).
+
+### DEC-011 — No invite flow / single-member workspaces in Sprint 1
+**Decision:** There is no mechanism for a second person to join an existing workspace in Sprint 1. `workspace_members` INSERT is restricted to the workspace-creation flow only.
+**Rationale:** `architecture.md` §4 scoped this deliberately to keep Sprint 1 minimal — explicitly stated as "no separate invite flow in Sprint 1."
+**Alternatives Considered:** A minimal invite-by-email mechanism, which `pre-implementation-audit.md` finding C-2 flagged as in tension with the PRD's "shared... for the whole team" framing.
+**Tradeoffs:** As scoped, a workspace can only ever have one member — the audit explicitly flagged this as a contradiction with the product's stated team-collaboration value proposition. This was surfaced for leadership awareness but the underlying architecture decision (no invite flow) was not reversed in any subsequent document.
+**Owner:** CTO (decision); Founder/PM (owns the flagged messaging contradiction, per audit C-2)
+**Date:** 2026-06-25
+**Future Revisit Conditions:** Must be resolved — either descope the "whole team" framing from the PRD, or add a minimal invite mechanism as explicitly evaluated new scope — before any pilot messaging claims multi-person collaboration.
+
+### DEC-012 — `workspace_members.role` retained but inert in Sprint 1
+**Decision:** The `role` column (`'owner'` / `'member'`) exists on `workspace_members`, but no RLS policy or UI in Sprint 1 differentiates behavior by role.
+**Rationale:** `pre-implementation-audit.md` finding C-3 flagged this as the same kind of premature structure that DEC-002 rejected for the Organization layer. `sprint-1-execution-plan.md` Phase 2 resolved the inconsistency not by dropping the column, but by explicitly documenting it as inert via a migration comment, rather than leaving it silently unused.
+**Alternatives Considered:** Dropping `role` entirely for Sprint 1 and re-adding it only when ownership-gated actions are actually built.
+**Tradeoffs:** Carries a column with no current behavioral effect, in exchange for not needing a migration when owner-only actions (e.g. "only the owner can delete a workspace") are eventually built.
+**Owner:** CTO
+**Date:** 2026-06-25
+**Future Revisit Conditions:** Revisit the first time any feature needs to distinguish owner from member — at that point, add the corresponding RLS policy and UI together, not separately.
+
+### DEC-013 — `tasks.assignee_id` retained but unused in Sprint 1
+**Decision:** The `assignee_id` column (and its index) exists on `tasks`, but no Sprint 1 UI sets or displays it.
+**Rationale:** Anticipates the Sprint 2 "My Tasks" feature (DEC-004). `pre-implementation-audit.md` finding U-1 flagged this as the same speculative-build pattern rejected elsewhere; `sprint-1-execution-plan.md` Phase 2 resolved it the same way as DEC-012 — keep it, but document the exception explicitly via a migration comment rather than leaving it unexplained.
+**Alternatives Considered:** Dropping the column from Sprint 1's migrations and adding it (plus its index) only when "My Tasks" is actually built.
+**Tradeoffs:** A small amount of inert schema today, in exchange for no migration needed when Sprint 2 begins.
+**Owner:** CTO
+**Date:** 2026-06-25
+**Future Revisit Conditions:** Becomes load-bearing the moment Sprint 2's "My Tasks" view is built — no further schema change needed at that point, only UI.
+
+### DEC-020 — Single Supabase project, no staging environment for Sprint 1
+**Decision:** Sprint 1 runs on one Supabase project, with no separate staging/pre-production environment.
+**Rationale:** `architecture.md` §5 — "no separate staging project required yet, given pilot scale."
+**Alternatives Considered:** A separate staging Supabase project mirroring production for safer migration testing.
+**Tradeoffs:** Faster and cheaper for Sprint 1's small pilot, but `executive-summary.md` §4 already flags this as something that "should be revisited before any public launch beyond invited pilots."
+**Owner:** CTO
+**Date:** 2026-06-25
+**Future Revisit Conditions:** Add a staging environment before any launch beyond the initial invited pilot cohort.
+
+---
+
+## Security & Auth Decisions
+
+### DEC-014 — Email confirmation disabled for Sprint 1
+**Decision:** Supabase Auth's default "confirm email before sign-in" requirement is explicitly turned off for Sprint 1.
+**Rationale:** `pre-implementation-audit.md` finding C-1 identified that leaving Supabase's default enabled would make the ≤3-minute Time-to-Value requirement (DEC-005) unmeetable for any new sign-up, since it forces the user to leave the app, open an email client, and click a link. `sprint-1-execution-plan.md` Phase 3 (task T17) made the explicit choice to disable it rather than relax DEC-005.
+**Alternatives Considered:** Leaving Supabase's default confirmation flow enabled and revising AC-6 to exclude email-confirmation time from the measured 3 minutes.
+**Tradeoffs:** Slightly weaker initial account-verification posture (unconfirmed emails can create workspaces) in exchange for a measurable, achievable time-to-value target during a small, invited pilot.
+**Owner:** CTO, Product Engineer
+**Date:** 2026-06-25
+**Future Revisit Conditions:** Revisit before any public (non-invited) sign-up is allowed — re-enable confirmation or add an equivalent anti-abuse mechanism at that point.
+
+---
+
+## UX & Interaction Decisions
+
+### DEC-015 — Inline quick-add for task creation (no modal)
+**Decision:** New tasks are created via an inline input pinned to a Kanban column, not a modal dialog.
+**Rationale:** `ux-review.md` §5 — a modal interrupts the board view and adds a close/cancel decision point; inline quick-add keeps the user's eyes on the board and supports rapid sequential entry, important for a volunteer coordinator entering a backlog in one sitting.
+**Alternatives Considered:** A `Dialog`-based task creation form (more room for future optional fields).
+**Tradeoffs:** Faster entry now, but less room to add optional fields (e.g. description, due date) without redesigning the interaction if those are ever added.
+**Owner:** UX Reviewer
+**Date:** 2026-06-25
+**Future Revisit Conditions:** Revisit if/when tasks need more than a title at creation time — a modal becomes more justifiable once there's more than one field to fill in.
+
+### DEC-016 — Drag-and-drop plus keyboard fallback as the task status-change mechanism
+**Decision:** Dragging a card between Kanban columns is the primary way to change task status; a keyboard-focusable "Move to…" control on each card is the accessible fallback. There is no status dropdown/select as a third option.
+**Rationale:** `architecture.md` §6 and `ux-review.md` §6 originally rejected a status dropdown "to keep the interaction model to one mental model." `pre-implementation-audit.md` finding X-1 then identified that drag-and-drop alone leaves keyboard/screen-reader users with no way to move a task at all; `implementation-roadmap.md` T44 and `sprint-1-execution-plan.md` Phase 6 resolved this by adding the keyboard fallback rather than abandoning the single-mental-model design.
+**Alternatives Considered:** A status dropdown on every card (rejected for adding a second mental model); accepting drag-only as a documented Sprint 1 limitation (rejected once flagged as a complete accessibility blocker, not just reduced affordance).
+**Tradeoffs:** One extra small control per card, in exchange for the interaction being achievable by every input modality.
+**Owner:** UX Reviewer, Product Engineer
+**Date:** 2026-06-25
+**Future Revisit Conditions:** None anticipated — this resolves the accessibility gap directly; revisit only if user testing reveals the "Move to…" control itself is confusing.
+
+### DEC-017 — Fixed four-column Kanban board (not configurable)
+**Decision:** Every project's Kanban board has exactly four columns — Backlog, To Do, In Progress, Done — matching the `tasks.status` check constraint. Columns are not user-configurable in Sprint 1.
+**Rationale:** Consistent with "opinionated over configurable" (`CLAUDE.md` Product Principles) and DEC-003's rejection of a separate status table.
+**Alternatives Considered:** User- or workspace-configurable column names/counts.
+**Tradeoffs:** `pre-implementation-audit.md` and `executive-summary.md` both flag that the fixed vocabulary may not match every workspace's internal process language — accepted as an intentional MVP opinion.
+**Owner:** Founder/PM, UX Reviewer, CTO
+**Date:** 2026-06-25
+**Future Revisit Conditions:** Revisit only if validated by real pilot usage showing the fixed vocabulary is a genuine adoption blocker — not by speculation.
+
+---
+
+## Implementation Decisions
+
+### DEC-018 — Slug generation with collision-retry strategy
+**Decision:** Workspace slugs are generated by slugifying the workspace name; on a uniqueness collision, a short numeric/random suffix is appended and generation retries.
+**Rationale:** `database-schema.md` requires `workspaces.slug` to be unique, but no document originally specified how collisions (e.g. two pilot nonprofits both named "Volunteers") would be handled. `pre-implementation-audit.md` finding M-4 flagged this gap; `implementation-roadmap.md` T23 and `sprint-1-execution-plan.md` Phase 4 resolved it with this explicit strategy.
+**Alternatives Considered:** Requiring globally unique workspace names (worse UX, defeats the purpose of allowing any name); failing loudly on collision and asking the user to pick a different name (adds a step inside the timed onboarding flow, working against DEC-005).
+**Tradeoffs:** A small amount of slug-generation complexity in exchange for a collision never blocking the timed onboarding flow.
+**Owner:** Product Engineer
+**Date:** 2026-06-25
+**Future Revisit Conditions:** None anticipated for Sprint 1 scale; revisit only if slug-based routing needs change (e.g. custom vanity URLs).
+
+### DEC-019 — Fractional `position` ordering with a rebalance safeguard
+**Decision:** Task ordering within a Kanban column uses a fractional `numeric` `position` column (avoiding re-indexing every sibling on reorder), with a defined rebalance routine that re-spaces a column's positions once adjacent values converge below a threshold.
+**Rationale:** `database-schema.md` chose fractional positioning for reordering efficiency; `pre-implementation-audit.md` finding M-5 flagged the well-known failure mode of fractional-indexing schemes (numeric precision decay after many reorders) with no defined mitigation. `implementation-roadmap.md` T43 and `sprint-1-execution-plan.md` Phase 6 added the explicit rebalance safeguard.
+**Alternatives Considered:** Integer positions with full re-indexing of siblings on every reorder (simpler logic, more writes per move); no rebalancing at all (simpler, but eventually breaks under heavy use).
+**Tradeoffs:** Slightly more implementation complexity (a rebalance routine and its trigger threshold) in exchange for avoiding a hard-to-reproduce ordering bug after sustained real usage.
+**Owner:** Product Engineer
+**Date:** 2026-06-25
+**Future Revisit Conditions:** None anticipated; revisit only if a different ordering scheme (e.g. linked-list-style ordering) is ever needed for a feature beyond Sprint 1's scope.
+
+---
+
+## Open Items (Not Decisions)
+
+These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:
+
+- **Single-member workspaces vs. "shared with the whole team" messaging** (see DEC-011 / audit C-2) — needs an explicit Founder/PM call before pilot messaging goes out.
+- **No edit/delete for workspaces, projects, or tasks** (audit M-1) — not decided whether this is in Sprint 1 scope or an accepted pilot-period gap.
+- **No password-reset flow** (audit M-3) — not decided whether this is in Sprint 1 scope or covered by manual pilot support.
+- **Mobile Kanban board layout** (audit X-2) — `sprint-1-execution-plan.md` Phase 7 names an example behavior (horizontal scroll) but has not committed to it as a firm decision.
+
+Do not treat any of the above as settled. If you resolve one, add it to the appropriate section above with a new `DEC-0##` ID rather than editing this list in place.

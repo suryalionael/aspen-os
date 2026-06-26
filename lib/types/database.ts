@@ -14,6 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      checklist_items: {
+        Row: {
+          completed: boolean
+          content: string
+          created_at: string
+          id: string
+          position: number
+          task_id: string
+        }
+        Insert: {
+          completed?: boolean
+          content: string
+          created_at?: string
+          id?: string
+          position: number
+          task_id: string
+        }
+        Update: {
+          completed?: boolean
+          content?: string
+          created_at?: string
+          id?: string
+          position?: number
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_items_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       labels: {
         Row: {
           color: string

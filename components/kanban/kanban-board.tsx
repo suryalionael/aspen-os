@@ -25,6 +25,8 @@ type Task = {
   due_date: string | null
   priority: string | null
   labels: Label[]
+  checklistCompleted: number
+  checklistTotal: number
 }
 type TasksByStatus = Record<string, Task[]>
 
@@ -172,7 +174,14 @@ export function KanbanBoard({
   }
 
   function handleTaskCreated(task: { id: string; title: string; status: string }) {
-    const newTask: Task = { ...task, due_date: null, priority: null, labels: [] }
+    const newTask: Task = {
+      ...task,
+      due_date: null,
+      priority: null,
+      labels: [],
+      checklistCompleted: 0,
+      checklistTotal: 0,
+    }
     setTasksByStatus((previous) => ({
       ...previous,
       [task.status]: [...previous[task.status], newTask],
@@ -219,13 +228,16 @@ export function KanbanBoard({
   }
 
   function handleTaskRestored(task: ArchivedTask) {
-    // Labels aren't fetched for archived tasks (kept minimal — see
-    // getArchivedTasks), so a restored card shows its label chips again
-    // after the next full reload rather than instantly. The labels
-    // themselves are never lost; only the card's display lags briefly.
+    // Labels/checklist aren't fetched for archived tasks (kept minimal —
+    // see getArchivedTasks), so a restored card shows them again after the
+    // next full reload rather than instantly. Nothing is actually lost;
+    // only the card's display lags briefly.
     setTasksByStatus((previous) => ({
       ...previous,
-      [task.status]: [...previous[task.status], { ...task, labels: [] }],
+      [task.status]: [
+        ...previous[task.status],
+        { ...task, labels: [], checklistCompleted: 0, checklistTotal: 0 },
+      ],
     }))
   }
 
@@ -235,6 +247,20 @@ export function KanbanBoard({
       for (const status of STATUSES) {
         next[status] = previous[status].map((task) =>
           task.id === taskId ? { ...task, labels } : task
+        )
+      }
+      return next
+    })
+  }
+
+  function handleChecklistChanged(taskId: string, completed: number, total: number) {
+    setTasksByStatus((previous) => {
+      const next: TasksByStatus = { ...previous }
+      for (const status of STATUSES) {
+        next[status] = previous[status].map((task) =>
+          task.id === taskId
+            ? { ...task, checklistCompleted: completed, checklistTotal: total }
+            : task
         )
       }
       return next
@@ -277,6 +303,7 @@ export function KanbanBoard({
         onTaskArchiveChange={handleTaskArchiveChange}
         onTaskDeleted={removeTaskFromState}
         onLabelsChanged={handleLabelsChanged}
+        onChecklistChanged={handleChecklistChanged}
       />
     </div>
   )

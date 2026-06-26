@@ -1,18 +1,27 @@
 import Link from "next/link"
 
 import { ProjectCreateDialog } from "@/components/project/project-create-dialog"
+import { WorkspaceMembersDialog } from "@/components/workspace/workspace-members-dialog"
 
 export function ProjectSidebar({
   workspaceId,
   workspaceSlug,
   projects,
+  isOwner,
 }: {
   workspaceId: string
   workspaceSlug: string
   projects: { id: string; name: string }[]
+  isOwner: boolean
 }) {
   return (
     <aside className="flex w-56 flex-shrink-0 flex-col gap-3 border-r border-border p-4">
+      <div className="flex items-center justify-between border-b border-border pb-3">
+        <h2 className="text-sm font-semibold text-muted-foreground">
+          Workspace
+        </h2>
+        <WorkspaceMembersDialog workspaceId={workspaceId} isOwner={isOwner} />
+      </div>
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-muted-foreground">
           Projects

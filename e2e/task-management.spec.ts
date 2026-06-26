@@ -1,4 +1,14 @@
-import { test, expect } from "@playwright/test"
+import { test, expect, type Page } from "@playwright/test"
+
+// The task detail dialog's child components (labels, checklist) each fetch
+// their own data once on mount, firing POST requests that can otherwise
+// race a test's own waitForResponse for a subsequent action. Waiting for
+// their loaded-state buttons to appear lets those mount-time fetches
+// settle before any later action registers its own response listener.
+async function waitForDialogSettled(page: Page) {
+  await page.getByRole("button", { name: "Add label" }).waitFor({ state: "visible" })
+  await page.getByRole("button", { name: "Add item" }).waitFor({ state: "visible" })
+}
 
 /**
  * Sprint 2 Phase A1: task detail dialog — edit, archive/restore, and
@@ -38,13 +48,12 @@ test("edit, archive/restore, and delete all work from the task detail dialog", a
   // --- Open the detail dialog by clicking the card's title ---
   await page.getByText("Task to manage").click()
   await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
+  await waitForDialogSettled(page)
 
   // --- Edit: rename the task and confirm the card updates ---
   const titleInput = page.getByLabel("Title")
   await titleInput.fill("Renamed task")
-  const editPersisted = page.waitForResponse(
-    (resp) => resp.request().method() === "POST"
-  )
+  const editPersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Save" }).click()
   await editPersisted
   await page.keyboard.press("Escape")
@@ -55,15 +64,14 @@ test("edit, archive/restore, and delete all work from the task detail dialog", a
   // --- Archive: the task should disappear from the board ---
   await page.getByText("Renamed task").click()
   await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
+  await waitForDialogSettled(page)
   // Asserts on actual Activity panel content (not just each mutation's own
   // success response) — see the labels test below for why this matters.
   await expect(page.getByText("Task created", { exact: false })).toBeVisible()
   await expect(
     page.getByText("Title changed to Renamed task", { exact: false })
   ).toBeVisible()
-  const archivePersisted = page.waitForResponse(
-    (resp) => resp.request().method() === "POST"
-  )
+  const archivePersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Archive" }).click()
   await archivePersisted
   await expect(page.getByText("Renamed task")).toHaveCount(0)
@@ -71,9 +79,7 @@ test("edit, archive/restore, and delete all work from the task detail dialog", a
   // --- Restore from the Archived dialog and confirm it reappears ---
   await page.getByRole("button", { name: "Archived" }).click()
   await expect(page.getByText("Renamed task")).toBeVisible()
-  const restorePersisted = page.waitForResponse(
-    (resp) => resp.request().method() === "POST"
-  )
+  const restorePersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Restore" }).click()
   await restorePersisted
   await page.keyboard.press("Escape")
@@ -84,10 +90,9 @@ test("edit, archive/restore, and delete all work from the task detail dialog", a
   // --- Delete: requires a second confirming click, then is gone for good ---
   await page.getByText("Renamed task").click()
   await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
+  await waitForDialogSettled(page)
   await page.getByRole("button", { name: "Delete", exact: true }).click()
-  const deletePersisted = page.waitForResponse(
-    (resp) => resp.request().method() === "POST"
-  )
+  const deletePersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Confirm delete" }).click()
   await deletePersisted
   await expect(page.getByText("Renamed task")).toHaveCount(0)
@@ -131,6 +136,7 @@ test("description, due date, and priority can be set and show on the card", asyn
 
   await page.getByText("Task with fields").click()
   await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
+  await waitForDialogSettled(page)
 
   await page.getByLabel("Description").fill("**Important** details here")
   // The live Markdown preview renders the bold text without the ** markers.
@@ -139,9 +145,7 @@ test("description, due date, and priority can be set and show on the card", asyn
   await page.getByLabel("Due date").fill("2026-12-31")
   await page.getByLabel("Priority").selectOption("urgent")
 
-  const savePersisted = page.waitForResponse(
-    (resp) => resp.request().method() === "POST"
-  )
+  const savePersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Save" }).click()
   await savePersisted
   await page.keyboard.press("Escape")
@@ -156,6 +160,7 @@ test("description, due date, and priority can be set and show on the card", asyn
   await page.reload()
   await page.getByText("Task with fields").click()
   await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
+  await waitForDialogSettled(page)
   await expect(page.getByLabel("Description")).toHaveValue("**Important** details here")
   await expect(page.getByLabel("Due date")).toHaveValue("2026-12-31")
   await expect(page.getByLabel("Priority")).toHaveValue("urgent")
@@ -194,22 +199,19 @@ test("labels can be created, attached to a task, and removed", async ({ page }) 
 
   await page.getByText("Task with labels").click()
   await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
+  await waitForDialogSettled(page)
 
   // Create a new label.
   await page.getByLabel("New label name").fill("Bug")
   await page.getByLabel("New label color").selectOption("red")
-  const createPersisted = page.waitForResponse(
-    (resp) => resp.request().method() === "POST"
-  )
-  await page.getByRole("button", { name: "Add" }).click()
+  const createPersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
+  await page.getByRole("button", { name: "Add label" }).click()
   await createPersisted
 
   // Attach it to the task.
   const labelChip = page.getByRole("button", { name: "Bug", exact: true })
   await expect(labelChip).toBeVisible()
-  const attachPersisted = page.waitForResponse(
-    (resp) => resp.request().method() === "POST"
-  )
+  const attachPersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await labelChip.click()
   await attachPersisted
 
@@ -220,9 +222,8 @@ test("labels can be created, attached to a task, and removed", async ({ page }) 
   // Detach it again from the dialog.
   await page.getByText("Task with labels").click()
   await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
-  const detachPersisted = page.waitForResponse(
-    (resp) => resp.request().method() === "POST"
-  )
+  await waitForDialogSettled(page)
+  const detachPersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Bug", exact: true }).click()
   await detachPersisted
 
@@ -236,4 +237,87 @@ test("labels can be created, attached to a task, and removed", async ({ page }) 
 
   await page.keyboard.press("Escape")
   await expect(page.getByTestId("task-card").getByText("Bug")).toHaveCount(0)
+})
+
+/**
+ * Sprint 2 Phase A4: a single implicit checklist per task — add, check
+ * off, and remove items, with a live progress count on the board card.
+ */
+test("checklist items can be added, checked off, and removed", async ({ page }) => {
+  const unique = Date.now()
+  const email = `e2e-checklist-${unique}@example.com`
+  const password = "TestPassword123!"
+
+  await page.goto("/sign-up")
+  await page.getByLabel("Email").fill(email)
+  await page.getByLabel("Password").fill(password)
+  await page.getByRole("button", { name: "Create account" }).click()
+
+  await page.waitForURL("**/workspaces/new")
+  await page.getByLabel("Workspace name").fill(`E2E Workspace ${unique}`)
+  await page.getByRole("button", { name: "Create workspace" }).click()
+
+  await page.waitForURL((url) => /^\/[^/]+$/.test(url.pathname))
+
+  await page.getByRole("button", { name: "New" }).click()
+  await page.getByLabel("Project name").fill(`E2E Project ${unique}`)
+  await page.getByRole("button", { name: "Create project" }).click()
+
+  await page.waitForURL((url) => /^\/[^/]+\/[^/]+$/.test(url.pathname))
+
+  const quickAdd = page.getByPlaceholder("Add a task…")
+  await quickAdd.fill("Task with checklist")
+  await quickAdd.press("Enter")
+  await expect(page.getByText("Task with checklist")).toBeVisible()
+
+  await page.getByText("Task with checklist").click()
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
+  await waitForDialogSettled(page)
+
+  const newItemInput = page.getByLabel("New checklist item")
+  await newItemInput.fill("Write tests")
+  const addPersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
+  await newItemInput.press("Enter")
+  await addPersisted
+  await expect(
+    page.getByTestId("checklist-item").getByText("Write tests")
+  ).toBeVisible()
+
+  await newItemInput.fill("Ship it")
+  const addPersisted2 = page.waitForResponse((resp) => resp.request().method() === "POST")
+  await newItemInput.press("Enter")
+  await addPersisted2
+  await expect(
+    page.getByTestId("checklist-item").getByText("Ship it")
+  ).toBeVisible()
+
+  // Board card shows progress without needing to reopen the dialog.
+  await page.keyboard.press("Escape")
+  await expect(page.getByTestId("task-card").getByText("0/2")).toBeVisible()
+
+  // Check one off and confirm the count updates live, plus an activity entry.
+  await page.getByText("Task with checklist").click()
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
+  await waitForDialogSettled(page)
+  const checkPersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
+  await page.getByLabel('Mark "Write tests" as done').check()
+  await checkPersisted
+  await expect(
+    page.getByText('Checked off "Write tests"', { exact: false })
+  ).toBeVisible()
+
+  await page.keyboard.press("Escape")
+  await expect(page.getByTestId("task-card").getByText("1/2")).toBeVisible()
+
+  // Remove an item and confirm the count drops accordingly.
+  await page.getByText("Task with checklist").click()
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
+  await waitForDialogSettled(page)
+  const deletePersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
+  await page.getByLabel('Delete "Ship it"').click()
+  await deletePersisted
+  await expect(page.getByTestId("checklist-item").getByText("Ship it")).toHaveCount(0)
+
+  await page.keyboard.press("Escape")
+  await expect(page.getByTestId("task-card").getByText("1/1")).toBeVisible()
 })

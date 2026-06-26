@@ -39,14 +39,23 @@ export function TaskLabelPicker({
   const [, startTransition] = useTransition()
 
   useEffect(() => {
+    // Guards against React StrictMode's double-invoked effects in
+    // development: without this, the first invocation's fetch can resolve
+    // after a later optimistic update and stomp it with stale data — the
+    // same race confirmed and fixed in TaskChecklist.
+    let active = true
     setLoading(true)
     Promise.all([getProjectLabels(projectId), getTaskLabels(taskId)]).then(
       ([projectResult, taskResult]) => {
+        if (!active) return
         setProjectLabels("success" in projectResult ? projectResult.labels : [])
         setTaskLabels("success" in taskResult ? taskResult.labels : [])
         setLoading(false)
       }
     )
+    return () => {
+      active = false
+    }
   }, [projectId, taskId])
 
   function notifyChange(next: Label[]) {
@@ -122,7 +131,7 @@ export function TaskLabelPicker({
                 type="button"
                 aria-label={`Delete label ${label.name}`}
                 onClick={() => handleDeleteLabel(label)}
-                className="hidden text-xs text-muted-foreground group-hover:inline"
+                className="text-xs text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
               >
                 ×
               </button>
@@ -155,7 +164,7 @@ export function TaskLabelPicker({
           ))}
         </select>
         <Button size="sm" variant="outline" className="h-7" onClick={handleCreateLabel}>
-          Add
+          Add label
         </Button>
       </div>
       {error && (

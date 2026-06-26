@@ -38,6 +38,8 @@ export function TaskCard({
   dueDate,
   priority,
   labels,
+  checklistCompleted,
+  checklistTotal,
   onMove,
   onOpen,
 }: {
@@ -47,6 +49,8 @@ export function TaskCard({
   dueDate: string | null
   priority: string | null
   labels: Label[]
+  checklistCompleted: number
+  checklistTotal: number
   onMove: (newStatus: string) => void
   onOpen: () => void
 }) {
@@ -99,8 +103,13 @@ export function TaskCard({
           ))}
         </div>
       )}
-      {(dueDate || priority) && (
+      {(dueDate || priority || checklistTotal > 0) && (
         <div className="flex items-center gap-2">
+          {checklistTotal > 0 && (
+            <span className="text-xs text-muted-foreground">
+              ☑ {checklistCompleted}/{checklistTotal}
+            </span>
+          )}
           {priority && (
             <span
               className={`rounded px-1.5 py-0.5 text-xs font-medium ${

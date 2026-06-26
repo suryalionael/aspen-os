@@ -20,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { TaskLabelPicker } from "@/components/kanban/task-label-picker"
+import { TaskChecklist } from "@/components/kanban/task-checklist"
 import type { Label } from "@/lib/labels"
 import {
   archiveTask,
@@ -69,6 +70,14 @@ const ACTIVITY_LABELS: Record<string, (metadata: Record<string, unknown> | null)
   unarchived: () => "Task restored from archive",
   label_added: (metadata) => `Label "${String(metadata?.label_name ?? "")}" added`,
   label_removed: (metadata) => `Label "${String(metadata?.label_name ?? "")}" removed`,
+  checklist_item_added: (metadata) =>
+    `Checklist item "${String(metadata?.content ?? "")}" added`,
+  checklist_item_completed: (metadata) =>
+    `Checked off "${String(metadata?.content ?? "")}"`,
+  checklist_item_reopened: (metadata) =>
+    `Unchecked "${String(metadata?.content ?? "")}"`,
+  checklist_item_removed: (metadata) =>
+    `Checklist item "${String(metadata?.content ?? "")}" removed`,
 }
 
 function describeActivity(entry: TaskActivityEntry): string {
@@ -84,6 +93,7 @@ export function TaskDetailDialog({
   onTaskArchiveChange,
   onTaskDeleted,
   onLabelsChanged,
+  onChecklistChanged,
 }: {
   taskId: string | null
   open: boolean
@@ -92,6 +102,7 @@ export function TaskDetailDialog({
   onTaskArchiveChange: (taskId: string, archivedAt: string | null) => void
   onTaskDeleted: (taskId: string) => void
   onLabelsChanged: (taskId: string, labels: Label[]) => void
+  onChecklistChanged: (taskId: string, completed: number, total: number) => void
 }) {
   const [editState, editAction, editPending] = useActionState(editTask, undefined)
   const [, startTransition] = useTransition()
@@ -104,11 +115,18 @@ export function TaskDetailDialog({
 
   useEffect(() => {
     if (!open || !taskId) return
+    // Guards against React StrictMode's double-invoked effects in
+    // development: without this, the first invocation's fetch can resolve
+    // after a later optimistic update (e.g. refetchActivity) and stomp it
+    // with stale data — the same race confirmed and fixed in
+    // TaskChecklist/TaskLabelPicker.
+    let active = true
     setConfirmingDelete(false)
     setDetailLoading(true)
     setActivityLoading(true)
 
     getTask(taskId).then((result) => {
+      if (!active) return
       if ("success" in result) {
         setTaskDetail(result.task)
         setDescriptionDraft(result.task.description ?? "")
@@ -116,9 +134,13 @@ export function TaskDetailDialog({
       setDetailLoading(false)
     })
     getTaskActivity(taskId).then((result) => {
+      if (!active) return
       setActivity("success" in result ? result.activity : [])
       setActivityLoading(false)
     })
+    return () => {
+      active = false
+    }
   }, [open, taskId])
 
   // The activity panel otherwise only loads once when the dialog opens —
@@ -287,6 +309,17 @@ export function TaskDetailDialog({
             projectId={taskDetail.project_id}
             onLabelsChanged={(labels) => {
               onLabelsChanged(taskDetail.id, labels)
+              refetchActivity()
+            }}
+          />
+        </div>
+
+        <div className="border-t border-border pt-3">
+          <h3 className="mb-2 text-sm font-semibold">Checklist</h3>
+          <TaskChecklist
+            taskId={taskDetail.id}
+            onChanged={(completed, total) => {
+              onChecklistChanged(taskDetail.id, completed, total)
               refetchActivity()
             }}
           />

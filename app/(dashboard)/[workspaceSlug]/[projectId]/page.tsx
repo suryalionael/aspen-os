@@ -26,7 +26,9 @@ export default async function ProjectPage({
   // board as its initial, optimistically-managed state.
   const { data: tasks } = await supabase
     .from("tasks")
-    .select("id, title, status, due_date, priority, task_labels(labels(id, name, color))")
+    .select(
+      "id, title, status, due_date, priority, task_labels(labels(id, name, color)), checklist_items(completed)"
+    )
     .eq("project_id", project.id)
     .is("archived_at", null)
     .order("status", { ascending: true })
@@ -41,6 +43,8 @@ export default async function ProjectPage({
     labels: task.task_labels.flatMap((row) =>
       Array.isArray(row.labels) ? row.labels : row.labels ? [row.labels] : []
     ),
+    checklistTotal: task.checklist_items.length,
+    checklistCompleted: task.checklist_items.filter((item) => item.completed).length,
   }))
 
   return (

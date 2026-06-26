@@ -30,6 +30,8 @@ export function KanbanColumn({
     due_date: string | null
     priority: string | null
     labels: Label[]
+    checklistCompleted: number
+    checklistTotal: number
   }[]
   onTaskMove: (taskId: string, newStatus: string) => void
   onTaskCreated: (task: { id: string; title: string; status: string }) => void
@@ -70,6 +72,8 @@ export function KanbanColumn({
                 dueDate={task.due_date}
                 priority={task.priority}
                 labels={task.labels}
+                checklistCompleted={task.checklistCompleted}
+                checklistTotal={task.checklistTotal}
                 onMove={(newStatus) => onTaskMove(task.id, newStatus)}
                 onOpen={() => onTaskOpen(task.id)}
               />

@@ -27,6 +27,9 @@ yarn-error.log*
 # claude code harness session state (not project source)
 .claude/scheduled_tasks.lock
 
+# supabase CLI local state
+supabase/.temp
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

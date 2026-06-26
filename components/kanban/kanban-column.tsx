@@ -1,3 +1,8 @@
+"use client"
+
+import { useDroppable } from "@dnd-kit/core"
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
+
 import { TaskCard } from "@/components/kanban/task-card"
 import { TaskCreateInline } from "@/components/kanban/task-create-inline"
 
@@ -12,28 +17,53 @@ export function KanbanColumn({
   status,
   projectId,
   tasks,
+  onTaskMove,
+  onTaskCreated,
 }: {
   status: string
   projectId: string
   tasks: { id: string; title: string }[]
+  onTaskMove: (taskId: string, newStatus: string) => void
+  onTaskCreated: (task: { id: string; title: string; status: string }) => void
 }) {
+  // The column itself is a drop target (id = status) so dropping on empty
+  // space — not just on another card — registers correctly.
+  const { setNodeRef } = useDroppable({ id: status })
+
   return (
-    <div className="flex w-72 flex-shrink-0 flex-col gap-3 rounded-lg bg-secondary/50 p-3">
+    <div
+      ref={setNodeRef}
+      data-testid={`column-${status}`}
+      className="flex w-72 flex-shrink-0 flex-col gap-3 rounded-lg bg-secondary/50 p-3"
+    >
       <h3 className="px-1 text-sm font-semibold">
         {COLUMN_LABELS[status] ?? status}
       </h3>
       {/* Per ux-review.md §6: quick-add lives only in "To Do" — new tasks
           should be immediately actionable, not buried in the backlog. */}
-      {status === "todo" && <TaskCreateInline projectId={projectId} />}
-      {tasks.length === 0 ? (
-        <p className="px-1 text-sm text-muted-foreground">No tasks yet</p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {tasks.map((task) => (
-            <TaskCard key={task.id} title={task.title} />
-          ))}
-        </div>
+      {status === "todo" && (
+        <TaskCreateInline projectId={projectId} onTaskCreated={onTaskCreated} />
       )}
+      <SortableContext
+        items={tasks.map((task) => task.id)}
+        strategy={verticalListSortingStrategy}
+      >
+        {tasks.length === 0 ? (
+          <p className="px-1 text-sm text-muted-foreground">No tasks yet</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {tasks.map((task) => (
+              <TaskCard
+                key={task.id}
+                id={task.id}
+                title={task.title}
+                status={status}
+                onMove={(newStatus) => onTaskMove(task.id, newStatus)}
+              />
+            ))}
+          </div>
+        )}
+      </SortableContext>
     </div>
   )
 }

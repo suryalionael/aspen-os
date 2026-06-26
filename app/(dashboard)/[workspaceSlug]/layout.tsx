@@ -25,8 +25,9 @@ export default async function WorkspaceLayout({
 
   const { data: projects } = await supabase
     .from("projects")
-    .select("id, name")
+    .select("id, name, project_favorites(user_id)")
     .eq("workspace_id", workspace.id)
+    .is("archived_at", null)
     .order("created_at", { ascending: true })
 
   const {
@@ -40,12 +41,18 @@ export default async function WorkspaceLayout({
     .eq("user_id", user?.id ?? "")
     .maybeSingle()
 
+  const projectsWithFavorite = (projects ?? []).map((project) => ({
+    id: project.id,
+    name: project.name,
+    isFavorite: project.project_favorites.some((row) => row.user_id === user?.id),
+  }))
+
   return (
     <div className="flex flex-1">
       <ProjectSidebar
         workspaceId={workspace.id}
         workspaceSlug={workspace.slug}
-        projects={projects ?? []}
+        projects={projectsWithFavorite}
         isOwner={membership?.role === "owner"}
       />
       <div className="flex flex-1 flex-col">{children}</div>

@@ -1,7 +1,31 @@
 import Link from "next/link"
 
 import { ProjectCreateDialog } from "@/components/project/project-create-dialog"
+import { ProjectFavoriteButton } from "@/components/project/project-favorite-button"
+import { ArchivedProjectsDialog } from "@/components/project/archived-projects-dialog"
 import { WorkspaceMembersDialog } from "@/components/workspace/workspace-members-dialog"
+
+type Project = { id: string; name: string; isFavorite: boolean }
+
+function ProjectLink({
+  project,
+  workspaceSlug,
+}: {
+  project: Project
+  workspaceSlug: string
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <Link
+        href={`/${workspaceSlug}/${project.id}`}
+        className="flex-1 rounded-md px-2 py-1.5 text-sm hover:bg-secondary"
+      >
+        {project.name}
+      </Link>
+      <ProjectFavoriteButton projectId={project.id} initialFavorite={project.isFavorite} />
+    </div>
+  )
+}
 
 export function ProjectSidebar({
   workspaceId,
@@ -11,9 +35,11 @@ export function ProjectSidebar({
 }: {
   workspaceId: string
   workspaceSlug: string
-  projects: { id: string; name: string }[]
+  projects: Project[]
   isOwner: boolean
 }) {
+  const favorites = projects.filter((project) => project.isFavorite)
+
   return (
     <aside className="flex w-56 flex-shrink-0 flex-col gap-3 border-r border-border p-4">
       <div className="flex items-center justify-between border-b border-border pb-3">
@@ -22,6 +48,24 @@ export function ProjectSidebar({
         </h2>
         <WorkspaceMembersDialog workspaceId={workspaceId} isOwner={isOwner} />
       </div>
+
+      {favorites.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <h2 className="px-1 text-sm font-semibold text-muted-foreground">
+            Favorites
+          </h2>
+          <nav className="flex flex-col gap-1">
+            {favorites.map((project) => (
+              <ProjectLink
+                key={project.id}
+                project={project}
+                workspaceSlug={workspaceSlug}
+              />
+            ))}
+          </nav>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-muted-foreground">
           Projects
@@ -36,16 +80,18 @@ export function ProjectSidebar({
       ) : (
         <nav className="flex flex-col gap-1">
           {projects.map((project) => (
-            <Link
+            <ProjectLink
               key={project.id}
-              href={`/${workspaceSlug}/${project.id}`}
-              className="rounded-md px-2 py-1.5 text-sm hover:bg-secondary"
-            >
-              {project.name}
-            </Link>
+              project={project}
+              workspaceSlug={workspaceSlug}
+            />
           ))}
         </nav>
       )}
+
+      <div className="border-t border-border pt-3">
+        <ArchivedProjectsDialog workspaceId={workspaceId} />
+      </div>
     </aside>
   )
 }

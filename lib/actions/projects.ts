@@ -1,6 +1,7 @@
 "use server"
 
 import { redirect } from "next/navigation"
+import { revalidatePath } from "next/cache"
 
 import { createClient } from "@/lib/supabase/server"
 
@@ -41,4 +42,133 @@ export async function createProject(
   }
 
   redirect(`/${workspaceSlug}/${project.id}`)
+}
+
+export async function renameProject(
+  projectId: string,
+  name: string
+): Promise<{ error: string } | { success: true; name: string }> {
+  const trimmed = name.trim()
+  if (!trimmed) {
+    return { error: "Project name is required." }
+  }
+
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from("projects")
+    .update({ name: trimmed })
+    .eq("id", projectId)
+    .select("name")
+    .single()
+
+  if (error || !data) {
+    return { error: error?.message ?? "Could not rename project." }
+  }
+
+  revalidatePath("/", "layout")
+  return { success: true, name: data.name }
+}
+
+export async function archiveProject(
+  projectId: string
+): Promise<{ error: string } | { success: true }> {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ archived_at: new Date().toISOString() })
+    .eq("id", projectId)
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath("/", "layout")
+  return { success: true }
+}
+
+export async function unarchiveProject(
+  projectId: string
+): Promise<{ error: string } | { success: true }> {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ archived_at: null })
+    .eq("id", projectId)
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath("/", "layout")
+  return { success: true }
+}
+
+export type ArchivedProject = { id: string; name: string }
+
+export async function getArchivedProjects(
+  workspaceId: string
+): Promise<{ error: string } | { success: true; projects: ArchivedProject[] }> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id, name")
+    .eq("workspace_id", workspaceId)
+    .not("archived_at", "is", null)
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  return { success: true, projects: data ?? [] }
+}
+
+export async function deleteProject(
+  projectId: string,
+  workspaceSlug: string
+): Promise<{ error: string } | { success: true }> {
+  const supabase = await createClient()
+
+  const { error } = await supabase.from("projects").delete().eq("id", projectId)
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  redirect(`/${workspaceSlug}`)
+}
+
+export async function toggleFavoriteProject(
+  projectId: string,
+  isFavorite: boolean
+): Promise<{ error: string } | { success: true }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "You must be signed in to favorite a project." }
+  }
+
+  const { error } = isFavorite
+    ? await supabase
+        .from("project_favorites")
+        .insert({ user_id: user.id, project_id: projectId })
+    : await supabase
+        .from("project_favorites")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("project_id", projectId)
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath("/", "layout")
+  return { success: true }
 }

@@ -77,7 +77,7 @@ test("edit, archive/restore, and delete all work from the task detail dialog", a
   await expect(page.getByText("Renamed task")).toHaveCount(0)
 
   // --- Restore from the Archived dialog and confirm it reappears ---
-  await page.getByRole("button", { name: "Archived" }).click()
+  await page.getByRole("button", { name: "Archived", exact: true }).click()
   await expect(page.getByText("Renamed task")).toBeVisible()
   const restorePersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Restore" }).click()
@@ -97,7 +97,7 @@ test("edit, archive/restore, and delete all work from the task detail dialog", a
   await deletePersisted
   await expect(page.getByText("Renamed task")).toHaveCount(0)
 
-  await page.getByRole("button", { name: "Archived" }).click()
+  await page.getByRole("button", { name: "Archived", exact: true }).click()
   await expect(page.getByText("No archived tasks")).toBeVisible()
 })
 

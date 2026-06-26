@@ -143,7 +143,7 @@ test("description, due date, and priority can be set and show on the card", asyn
   await expect(page.getByText("Important details here")).toBeVisible()
 
   await page.getByLabel("Due date").fill("2026-12-31")
-  await page.getByLabel("Priority").selectOption("urgent")
+  await page.getByRole("dialog").getByLabel("Priority").selectOption("urgent")
 
   const savePersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Save" }).click()
@@ -152,7 +152,7 @@ test("description, due date, and priority can be set and show on the card", asyn
 
   // The card itself shows the priority badge and due date without
   // needing to reopen the dialog.
-  await expect(page.getByText("Urgent")).toBeVisible()
+  await expect(page.getByTestId("task-card").getByText("Urgent")).toBeVisible()
   await expect(page.getByText("Due 12/31/2026")).toBeVisible()
 
   // Reopening confirms the fields persisted server-side, not just in the
@@ -163,7 +163,7 @@ test("description, due date, and priority can be set and show on the card", asyn
   await waitForDialogSettled(page)
   await expect(page.getByLabel("Description")).toHaveValue("**Important** details here")
   await expect(page.getByLabel("Due date")).toHaveValue("2026-12-31")
-  await expect(page.getByLabel("Priority")).toHaveValue("urgent")
+  await expect(page.getByRole("dialog").getByLabel("Priority")).toHaveValue("urgent")
 })
 
 /**

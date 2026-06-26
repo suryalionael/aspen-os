@@ -1,3 +1,5 @@
+import Link from "next/link"
+
 import { signOut } from "@/lib/actions/auth"
 import { createClient } from "@/lib/supabase/server"
 import { Button } from "@/components/ui/button"
@@ -22,6 +24,12 @@ export default async function DashboardLayout({
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted-foreground">{user?.email}</span>
+          <Link
+            href="/account"
+            className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+          >
+            Account
+          </Link>
           <form action={signOut}>
             <Button type="submit" variant="outline" size="sm">
               Sign out

@@ -21,6 +21,7 @@ export function KanbanColumn({
   onTaskMove,
   onTaskCreated,
   onTaskOpen,
+  isFiltered = false,
 }: {
   status: string
   projectId: string
@@ -37,6 +38,7 @@ export function KanbanColumn({
   onTaskMove: (taskId: string, newStatus: string) => void
   onTaskCreated: (task: { id: string; title: string; status: string }) => void
   onTaskOpen: (taskId: string) => void
+  isFiltered?: boolean
 }) {
   // The column itself is a drop target (id = status) so dropping on empty
   // space — not just on another card — registers correctly.
@@ -61,7 +63,9 @@ export function KanbanColumn({
         strategy={verticalListSortingStrategy}
       >
         {tasks.length === 0 ? (
-          <p className="px-1 text-sm text-muted-foreground">No tasks yet</p>
+          <p className="px-1 text-sm text-muted-foreground">
+            {isFiltered ? "No matching tasks" : "No tasks yet"}
+          </p>
         ) : (
           <div className="flex flex-col gap-2">
             {tasks.map((task) => (

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
 import {
   DndContext,
   PointerSensor,
@@ -13,8 +13,16 @@ import { arrayMove } from "@dnd-kit/sortable"
 import { moveTask, type ArchivedTask, type EditedTask } from "@/lib/actions/tasks"
 import type { Label } from "@/lib/labels"
 import { ArchivedTasksDialog } from "@/components/kanban/archived-tasks-dialog"
+import { BoardToolbar, type SortMode } from "@/components/kanban/board-toolbar"
 import { KanbanColumn } from "@/components/kanban/kanban-column"
 import { TaskDetailDialog } from "@/components/kanban/task-detail-dialog"
+
+const PRIORITY_ORDER: Record<string, number> = {
+  urgent: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+}
 
 const STATUSES = ["backlog", "todo", "in_progress", "done"] as const
 
@@ -52,6 +60,58 @@ export function KanbanBoard({
   const [error, setError] = useState<string | null>(null)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const [, startTransition] = useTransition()
+  const [searchQuery, setSearchQuery] = useState("")
+  const [priorityFilter, setPriorityFilter] = useState("")
+  const [labelFilter, setLabelFilter] = useState("")
+  const [sortMode, setSortMode] = useState<SortMode>("manual")
+
+  const allLabels = useMemo(() => {
+    const seen = new Map<string, Label>()
+    for (const status of STATUSES) {
+      for (const task of tasksByStatus[status]) {
+        for (const label of task.labels) seen.set(label.id, label)
+      }
+    }
+    return Array.from(seen.values())
+  }, [tasksByStatus])
+
+  const isFiltered = Boolean(searchQuery || priorityFilter || labelFilter)
+  const isViewModified = isFiltered || sortMode !== "manual"
+
+  const visibleTasksByStatus = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    const next: TasksByStatus = { backlog: [], todo: [], in_progress: [], done: [] }
+
+    for (const status of STATUSES) {
+      let list = tasksByStatus[status].filter((task) => {
+        if (query && !task.title.toLowerCase().includes(query)) return false
+        if (priorityFilter && task.priority !== priorityFilter) return false
+        if (labelFilter && !task.labels.some((label) => label.id === labelFilter)) {
+          return false
+        }
+        return true
+      })
+
+      if (sortMode === "priority") {
+        list = [...list].sort(
+          (a, b) =>
+            (PRIORITY_ORDER[a.priority ?? ""] ?? 99) -
+            (PRIORITY_ORDER[b.priority ?? ""] ?? 99)
+        )
+      } else if (sortMode === "due_date") {
+        list = [...list].sort((a, b) => {
+          if (!a.due_date && !b.due_date) return 0
+          if (!a.due_date) return 1
+          if (!b.due_date) return -1
+          return a.due_date.localeCompare(b.due_date)
+        })
+      }
+
+      next[status] = list
+    }
+
+    return next
+  }, [tasksByStatus, searchQuery, priorityFilter, labelFilter, sortMode])
 
   // A small activation distance keeps the "move to" select and ordinary
   // clicks from being swallowed by an accidental drag.
@@ -91,6 +151,16 @@ export function KanbanBoard({
   }
 
   function handleDragEnd(event: DragEndEvent) {
+    // Reordering a filtered/sorted view has no safe, unambiguous mapping
+    // back onto the real fractional position data, so drags are inert
+    // while the view is modified. This is gated here rather than by
+    // swapping the DndContext `sensors` array to an empty one — doing
+    // that changes the array's length between renders, which violates an
+    // internal hook-dependency invariant inside useSensors/DndContext and
+    // visibly corrupts the board (confirmed via a real "changed size
+    // between renders" React error, not just a theoretical concern).
+    if (isViewModified) return
+
     const { active, over } = event
     if (!over) return
 
@@ -289,9 +359,25 @@ export function KanbanBoard({
 
   return (
     <div className="flex flex-1 flex-col gap-3 p-6">
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-between gap-3">
+        <BoardToolbar
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
+          priorityFilter={priorityFilter}
+          onPriorityFilterChange={setPriorityFilter}
+          labelFilter={labelFilter}
+          onLabelFilterChange={setLabelFilter}
+          availableLabels={allLabels}
+          sortMode={sortMode}
+          onSortModeChange={setSortMode}
+        />
         <ArchivedTasksDialog projectId={projectId} onTaskRestored={handleTaskRestored} />
       </div>
+      {isViewModified && (
+        <p className="text-xs text-muted-foreground">
+          Drag and drop is disabled while searching, filtering, or sorting.
+        </p>
+      )}
       {error && (
         <p
           role="alert"
@@ -307,10 +393,11 @@ export function KanbanBoard({
               key={status}
               status={status}
               projectId={projectId}
-              tasks={tasksByStatus[status]}
+              tasks={visibleTasksByStatus[status]}
               onTaskMove={handleKeyboardMove}
               onTaskCreated={handleTaskCreated}
               onTaskOpen={setOpenTaskId}
+              isFiltered={isFiltered}
             />
           ))}
         </div>

@@ -26,7 +26,7 @@ export default async function ProjectPage({
   // board as its initial, optimistically-managed state.
   const { data: tasks } = await supabase
     .from("tasks")
-    .select("id, title, status")
+    .select("id, title, status, due_date, priority")
     .eq("project_id", project.id)
     .is("archived_at", null)
     .order("status", { ascending: true })

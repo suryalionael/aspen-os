@@ -10,14 +10,20 @@ import {
 } from "@dnd-kit/core"
 import { arrayMove } from "@dnd-kit/sortable"
 
-import { moveTask, type ArchivedTask } from "@/lib/actions/tasks"
+import { moveTask, type ArchivedTask, type EditedTask } from "@/lib/actions/tasks"
 import { ArchivedTasksDialog } from "@/components/kanban/archived-tasks-dialog"
 import { KanbanColumn } from "@/components/kanban/kanban-column"
 import { TaskDetailDialog } from "@/components/kanban/task-detail-dialog"
 
 const STATUSES = ["backlog", "todo", "in_progress", "done"] as const
 
-type Task = { id: string; title: string; status: string }
+type Task = {
+  id: string
+  title: string
+  status: string
+  due_date: string | null
+  priority: string | null
+}
 type TasksByStatus = Record<string, Task[]>
 
 function groupByStatus(tasks: Task[]): TasksByStatus {
@@ -163,10 +169,11 @@ export function KanbanBoard({
     commitMove(taskId, destinationStatus, destinationList, previousState, nextState)
   }
 
-  function handleTaskCreated(task: Task) {
+  function handleTaskCreated(task: { id: string; title: string; status: string }) {
+    const newTask: Task = { ...task, due_date: null, priority: null }
     setTasksByStatus((previous) => ({
       ...previous,
-      [task.status]: [...previous[task.status], task],
+      [task.status]: [...previous[task.status], newTask],
     }))
   }
 
@@ -180,12 +187,19 @@ export function KanbanBoard({
     })
   }
 
-  function handleTaskUpdated(updated: { id: string; title: string }) {
+  function handleTaskUpdated(updated: EditedTask) {
     setTasksByStatus((previous) => {
       const next: TasksByStatus = { ...previous }
       for (const status of STATUSES) {
         next[status] = previous[status].map((task) =>
-          task.id === updated.id ? { ...task, title: updated.title } : task
+          task.id === updated.id
+            ? {
+                ...task,
+                title: updated.title,
+                due_date: updated.due_date,
+                priority: updated.priority,
+              }
+            : task
         )
       }
       return next
@@ -205,19 +219,9 @@ export function KanbanBoard({
   function handleTaskRestored(task: ArchivedTask) {
     setTasksByStatus((previous) => ({
       ...previous,
-      [task.status]: [...previous[task.status], { id: task.id, title: task.title, status: task.status }],
+      [task.status]: [...previous[task.status], task],
     }))
   }
-
-  const openTask = openTaskId
-    ? (() => {
-        for (const status of STATUSES) {
-          const found = tasksByStatus[status].find((task) => task.id === openTaskId)
-          if (found) return { ...found, archived_at: null }
-        }
-        return null
-      })()
-    : null
 
   return (
     <div className="flex flex-1 flex-col gap-3 p-6">
@@ -248,7 +252,7 @@ export function KanbanBoard({
         </div>
       </DndContext>
       <TaskDetailDialog
-        task={openTask}
+        taskId={openTaskId}
         open={openTaskId !== null}
         onOpenChange={(open) => !open && setOpenTaskId(null)}
         onTaskUpdated={handleTaskUpdated}

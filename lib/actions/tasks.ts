@@ -202,10 +202,20 @@ export async function moveTask(input: MoveTaskInput): Promise<MoveTaskResult> {
   return { success: true }
 }
 
+export type EditedTask = {
+  id: string
+  title: string
+  description: string | null
+  due_date: string | null
+  priority: string | null
+}
+
 export type EditTaskState =
   | { error: string }
-  | { success: true; task: { id: string; title: string } }
+  | { success: true; task: EditedTask }
   | undefined
+
+const PRIORITY_VALUES = ["low", "medium", "high", "urgent"]
 
 export async function editTask(
   _prevState: EditTaskState,
@@ -213,12 +223,18 @@ export async function editTask(
 ): Promise<EditTaskState> {
   const taskId = String(formData.get("taskId") ?? "")
   const title = String(formData.get("title") ?? "").trim()
+  const description = String(formData.get("description") ?? "").trim()
+  const dueDate = String(formData.get("dueDate") ?? "").trim()
+  const priority = String(formData.get("priority") ?? "").trim()
 
   if (!taskId) {
     return { error: "Missing task." }
   }
   if (!title) {
     return { error: "Task title is required." }
+  }
+  if (priority && !PRIORITY_VALUES.includes(priority)) {
+    return { error: "Invalid priority." }
   }
 
   const supabase = await createClient()
@@ -232,27 +248,41 @@ export async function editTask(
 
   const { data: previousTask } = await supabase
     .from("tasks")
-    .select("title")
+    .select("title, description, due_date, priority")
     .eq("id", taskId)
     .maybeSingle()
 
   const { data: updatedTask, error } = await supabase
     .from("tasks")
-    .update({ title })
+    .update({
+      title,
+      description: description || null,
+      due_date: dueDate || null,
+      priority: priority || null,
+    })
     .eq("id", taskId)
-    .select("id, title")
+    .select("id, title, description, due_date, priority")
     .single()
 
   if (error || !updatedTask) {
     return { error: error?.message ?? "Could not update task." }
   }
 
-  if (previousTask && previousTask.title !== title) {
-    await logActivity(supabase, taskId, user.id, "edited", {
-      field: "title",
-      from: previousTask.title,
-      to: title,
-    })
+  if (previousTask) {
+    const changes: Array<{ field: string; from: unknown; to: unknown }> = [
+      { field: "title", from: previousTask.title, to: updatedTask.title },
+      {
+        field: "description",
+        from: previousTask.description,
+        to: updatedTask.description,
+      },
+      { field: "due_date", from: previousTask.due_date, to: updatedTask.due_date },
+      { field: "priority", from: previousTask.priority, to: updatedTask.priority },
+    ].filter((change) => change.from !== change.to)
+
+    for (const change of changes) {
+      await logActivity(supabase, taskId, user.id, "edited", change)
+    }
   }
 
   revalidatePath("/", "layout")
@@ -334,6 +364,34 @@ export async function deleteTask(taskId: string): Promise<DeleteTaskResult> {
   return { success: true }
 }
 
+export type TaskDetail = {
+  id: string
+  title: string
+  status: string
+  description: string | null
+  due_date: string | null
+  priority: string | null
+  archived_at: string | null
+}
+
+export async function getTask(
+  taskId: string
+): Promise<{ error: string } | { success: true; task: TaskDetail }> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from("tasks")
+    .select("id, title, status, description, due_date, priority, archived_at")
+    .eq("id", taskId)
+    .single()
+
+  if (error || !data) {
+    return { error: error?.message ?? "Task not found." }
+  }
+
+  return { success: true, task: data }
+}
+
 export type TaskActivityEntry = {
   id: string
   event_type: string
@@ -360,7 +418,13 @@ export async function getTaskActivity(
   return { success: true, activity: (data ?? []) as TaskActivityEntry[] }
 }
 
-export type ArchivedTask = { id: string; title: string; status: string }
+export type ArchivedTask = {
+  id: string
+  title: string
+  status: string
+  due_date: string | null
+  priority: string | null
+}
 
 export async function getArchivedTasks(
   projectId: string
@@ -369,7 +433,7 @@ export async function getArchivedTasks(
 
   const { data, error } = await supabase
     .from("tasks")
-    .select("id, title, status")
+    .select("id, title, status, due_date, priority")
     .eq("project_id", projectId)
     .not("archived_at", "is", null)
     .order("created_at", { ascending: false })

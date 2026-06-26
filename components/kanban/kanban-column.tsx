@@ -23,7 +23,12 @@ export function KanbanColumn({
 }: {
   status: string
   projectId: string
-  tasks: { id: string; title: string }[]
+  tasks: {
+    id: string
+    title: string
+    due_date: string | null
+    priority: string | null
+  }[]
   onTaskMove: (taskId: string, newStatus: string) => void
   onTaskCreated: (task: { id: string; title: string; status: string }) => void
   onTaskOpen: (taskId: string) => void
@@ -60,6 +65,8 @@ export function KanbanColumn({
                 id={task.id}
                 title={task.title}
                 status={status}
+                dueDate={task.due_date}
+                priority={task.priority}
                 onMove={(newStatus) => onTaskMove(task.id, newStatus)}
                 onOpen={() => onTaskOpen(task.id)}
               />

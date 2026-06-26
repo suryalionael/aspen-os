@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { createClient } from "@/lib/supabase/client"
 import {
   addComment,
   deleteComment,
@@ -11,6 +12,10 @@ import {
   getComments,
   type Comment,
 } from "@/lib/actions/comments"
+
+// How long a comment ID counts as "just written by this session" — see
+// the identical rationale in kanban-board.tsx (DEC-023).
+const SELF_ECHO_WINDOW_MS = 4000
 
 export function TaskComments({
   taskId,
@@ -26,8 +31,19 @@ export function TaskComments({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [newCommentBanner, setNewCommentBanner] = useState(false)
   const [, startTransition] = useTransition()
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const recentlyTouched = useRef<Map<string, number>>(new Map())
+
+  function markTouched(commentId: string) {
+    recentlyTouched.current.set(commentId, Date.now())
+  }
+
+  function wasRecentlyTouched(commentId: string) {
+    const touchedAt = recentlyTouched.current.get(commentId)
+    return Boolean(touchedAt) && Date.now() - touchedAt! < SELF_ECHO_WINDOW_MS
+  }
 
   useEffect(() => {
     // Guards against React StrictMode's double-invoked effects in
@@ -47,6 +63,83 @@ export function TaskComments({
     }
   }, [taskId])
 
+  // DEC-023: live comments via Realtime, scoped to this one task. Shown
+  // as an inline banner rather than a viewport-fixed toast (used on the
+  // board) since this renders inside an already-modal dialog, where a
+  // fixed-position element risks landing behind the dialog's own overlay
+  // depending on stacking context — an inline banner has no such risk.
+  useEffect(() => {
+    const supabase = createClient()
+    let cancelled = false
+    let channel: ReturnType<typeof supabase.channel> | null = null
+
+    // Per Supabase's docs (Postgres Changes guide, "Custom tokens"): the
+    // auth token must be set on the Realtime client before connecting to
+    // a channel, not after — confirmed directly in kanban-board.tsx (the
+    // same fix), where omitting this left the channel SUBSCRIBED but
+    // silently receiving zero events, with no error.
+    supabase.auth.getSession().then(({ data }) => {
+      if (cancelled) return
+      if (data.session) {
+        supabase.realtime.setAuth(data.session.access_token)
+      }
+      channel = buildChannel()
+    })
+
+    function buildChannel() {
+      return supabase
+        .channel(`comments-${taskId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "comments",
+            filter: `task_id=eq.${taskId}`,
+          },
+          (payload) => {
+            if (payload.eventType === "INSERT") {
+              const row = payload.new as Comment
+              if (wasRecentlyTouched(row.id)) return
+              setComments((previous) => {
+                if (previous.some((comment) => comment.id === row.id)) return previous
+                const next = [...previous, row]
+                onChanged(next.length)
+                return next
+              })
+              setNewCommentBanner(true)
+              setTimeout(() => setNewCommentBanner(false), 4000)
+              return
+            }
+
+            if (payload.eventType === "UPDATE") {
+              const row = payload.new as Comment
+              setComments((previous) =>
+                previous.map((comment) => (comment.id === row.id ? row : comment))
+              )
+              return
+            }
+
+            if (payload.eventType === "DELETE") {
+              const oldRow = payload.old as { id: string }
+              setComments((previous) => {
+                const next = previous.filter((comment) => comment.id !== oldRow.id)
+                if (next.length !== previous.length) onChanged(next.length)
+                return next
+              })
+            }
+          }
+        )
+        .subscribe()
+    }
+
+    return () => {
+      cancelled = true
+      if (channel) supabase.removeChannel(channel)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId])
+
   function handleAdd() {
     const content = newContent.trim()
     if (!content) return
@@ -57,6 +150,7 @@ export function TaskComments({
         setError(result.error)
         return
       }
+      markTouched(result.comment.id)
       const next = [...comments, result.comment]
       setComments(next)
       setNewContent("")
@@ -86,6 +180,7 @@ export function TaskComments({
   }
 
   function handleDelete(comment: Comment) {
+    markTouched(comment.id)
     const next = comments.filter((existing) => existing.id !== comment.id)
     setComments(next)
     startTransition(async () => {
@@ -100,6 +195,14 @@ export function TaskComments({
 
   return (
     <div className="flex flex-col gap-3">
+      {newCommentBanner && (
+        <p
+          role="status"
+          className="rounded-md bg-primary/10 px-2 py-1 text-xs text-primary"
+        >
+          New comment
+        </p>
+      )}
       {comments.length === 0 ? (
         <p className="text-sm text-muted-foreground">No comments yet</p>
       ) : (

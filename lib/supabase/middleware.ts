@@ -47,8 +47,13 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   const { pathname } = request.nextUrl
+  // /invite/[token] is the one public route that's dynamic rather than
+  // fixed (DEC-022) — an invitee who isn't signed in yet still needs to
+  // see which workspace they're being invited to before being asked to
+  // sign up/in.
+  const isPublic = PUBLIC_PATHS.has(pathname) || pathname.startsWith("/invite/")
 
-  if (!user && !PUBLIC_PATHS.has(pathname)) {
+  if (!user && !isPublic) {
     const redirectUrl = request.nextUrl.clone()
     redirectUrl.pathname = "/sign-in"
     return NextResponse.redirect(redirectUrl)

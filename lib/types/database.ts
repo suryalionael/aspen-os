@@ -275,6 +275,41 @@ export type Database = {
           },
         ]
       }
+      workspace_invites: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          revoked_at: string | null
+          token: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          revoked_at?: string | null
+          token?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          revoked_at?: string | null
+          token?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_invites_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_members: {
         Row: {
           created_at: string
@@ -356,6 +391,16 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_invite_workspace_name: { Args: { p_token: string }; Returns: string }
+      get_workspace_members_with_email: {
+        Args: { p_workspace_id: string }
+        Returns: {
+          email: string
+          joined_at: string
+          role: string
+          user_id: string
+        }[]
+      }
       is_workspace_member: {
         Args: { p_workspace_id: string }
         Returns: boolean
@@ -367,6 +412,23 @@ export type Database = {
       is_workspace_member_for_task: {
         Args: { p_task_id: string }
         Returns: boolean
+      }
+      is_workspace_owner: { Args: { p_workspace_id: string }; Returns: boolean }
+      join_workspace_via_invite: {
+        Args: { p_token: string }
+        Returns: {
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+          workspace_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "workspace_members"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {

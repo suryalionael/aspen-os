@@ -223,6 +223,17 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
+### DEC-022 — Invite-link workspace joining resolves DEC-011, makes role load-bearing (resolves DEC-012)
+**Decision:** Sprint 2 adds a single-use-per-workspace, shareable invite-link mechanism (`workspace_invites` table + `join_workspace_via_invite` RPC) rather than email-based invites. `workspace_members.role` becomes load-bearing for the first time: only an `'owner'` may create/revoke invites or remove other members; any member (including an owner) may remove themselves ("leave workspace").
+**Rationale:** DEC-011 explicitly required either dropping the "shared with the whole team" framing or adding a real invite mechanism before any pilot messaging claims multi-person collaboration — Sprint 2 chooses the latter. DEC-012 anticipated this exact moment: "the first time any feature needs to distinguish owner from member... add the corresponding RLS policy and UI together." A link (not email) avoids requiring a transactional-email provider, which doesn't exist in this stack yet.
+**Alternatives Considered:** Email-based invites (rejected for this sprint — would add a new external service dependency with no existing provider configured); allowing any member to invite/remove (rejected — undermines the point of having an owner role at all).
+**Tradeoffs:** An invite link has no expiry and is reusable until revoked, which is weaker than a single-use emailed link; acceptable given pilot scale and that an owner can revoke it. If the inviter (not yet authenticated) follows the link before signing up, they must manually return to the same link after sign-up/sign-in — no redirect-after-auth mechanism exists yet, and building one was treated as separate scope.
+**Owner:** CTO, Product Engineer
+**Date:** 2026-06-27 (Sprint 2)
+**Future Revisit Conditions:** Add invite expiry/single-use semantics and a redirect-after-auth flow if pilot feedback shows the current link behavior is confusing or a security concern at larger scale.
+
+---
+
 ## Open Items (Not Decisions)
 
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:

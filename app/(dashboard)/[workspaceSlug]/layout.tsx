@@ -29,12 +29,24 @@ export default async function WorkspaceLayout({
     .eq("workspace_id", workspace.id)
     .order("created_at", { ascending: true })
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  const { data: membership } = await supabase
+    .from("workspace_members")
+    .select("role")
+    .eq("workspace_id", workspace.id)
+    .eq("user_id", user?.id ?? "")
+    .maybeSingle()
+
   return (
     <div className="flex flex-1">
       <ProjectSidebar
         workspaceId={workspace.id}
         workspaceSlug={workspace.slug}
         projects={projects ?? []}
+        isOwner={membership?.role === "owner"}
       />
       <div className="flex flex-1 flex-col">{children}</div>
     </div>

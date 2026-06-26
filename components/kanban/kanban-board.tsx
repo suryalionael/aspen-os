@@ -10,8 +10,10 @@ import {
 } from "@dnd-kit/core"
 import { arrayMove } from "@dnd-kit/sortable"
 
-import { moveTask } from "@/lib/actions/tasks"
+import { moveTask, type ArchivedTask } from "@/lib/actions/tasks"
+import { ArchivedTasksDialog } from "@/components/kanban/archived-tasks-dialog"
 import { KanbanColumn } from "@/components/kanban/kanban-column"
+import { TaskDetailDialog } from "@/components/kanban/task-detail-dialog"
 
 const STATUSES = ["backlog", "todo", "in_progress", "done"] as const
 
@@ -37,6 +39,7 @@ export function KanbanBoard({
     groupByStatus(initialTasks)
   )
   const [error, setError] = useState<string | null>(null)
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const [, startTransition] = useTransition()
 
   // A small activation distance keeps the "move to" select and ordinary
@@ -167,8 +170,60 @@ export function KanbanBoard({
     }))
   }
 
+  function removeTaskFromState(taskId: string) {
+    setTasksByStatus((previous) => {
+      const next: TasksByStatus = { ...previous }
+      for (const status of STATUSES) {
+        next[status] = previous[status].filter((task) => task.id !== taskId)
+      }
+      return next
+    })
+  }
+
+  function handleTaskUpdated(updated: { id: string; title: string }) {
+    setTasksByStatus((previous) => {
+      const next: TasksByStatus = { ...previous }
+      for (const status of STATUSES) {
+        next[status] = previous[status].map((task) =>
+          task.id === updated.id ? { ...task, title: updated.title } : task
+        )
+      }
+      return next
+    })
+  }
+
+  function handleTaskArchiveChange(taskId: string, archivedAt: string | null) {
+    // The board never displays archived tasks (see app/(dashboard) project
+    // page query), so the moment a task is archived from its detail
+    // dialog, it leaves this client state and the dialog closes.
+    if (archivedAt) {
+      removeTaskFromState(taskId)
+      setOpenTaskId(null)
+    }
+  }
+
+  function handleTaskRestored(task: ArchivedTask) {
+    setTasksByStatus((previous) => ({
+      ...previous,
+      [task.status]: [...previous[task.status], { id: task.id, title: task.title, status: task.status }],
+    }))
+  }
+
+  const openTask = openTaskId
+    ? (() => {
+        for (const status of STATUSES) {
+          const found = tasksByStatus[status].find((task) => task.id === openTaskId)
+          if (found) return { ...found, archived_at: null }
+        }
+        return null
+      })()
+    : null
+
   return (
     <div className="flex flex-1 flex-col gap-3 p-6">
+      <div className="flex items-center justify-end">
+        <ArchivedTasksDialog projectId={projectId} onTaskRestored={handleTaskRestored} />
+      </div>
       {error && (
         <p
           role="alert"
@@ -187,10 +242,19 @@ export function KanbanBoard({
               tasks={tasksByStatus[status]}
               onTaskMove={handleKeyboardMove}
               onTaskCreated={handleTaskCreated}
+              onTaskOpen={setOpenTaskId}
             />
           ))}
         </div>
       </DndContext>
+      <TaskDetailDialog
+        task={openTask}
+        open={openTaskId !== null}
+        onOpenChange={(open) => !open && setOpenTaskId(null)}
+        onTaskUpdated={handleTaskUpdated}
+        onTaskArchiveChange={handleTaskArchiveChange}
+        onTaskDeleted={removeTaskFromState}
+      />
     </div>
   )
 }

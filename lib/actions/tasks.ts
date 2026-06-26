@@ -68,12 +68,30 @@ export async function createTask(
     return { error: error?.message ?? "Could not create task." }
   }
 
+  await logActivity(supabase, newTask.id, user.id, "created")
+
   // KanbanBoard owns its own client-side task state for drag-and-drop
   // (Phase 6) rather than re-rendering directly from server props, so this
   // revalidation alone would not make the new task appear — TaskCreateInline
   // adds it to that state explicitly via the returned task below.
   revalidatePath("/", "layout")
   return { success: true, task: newTask }
+}
+
+// Shared by every mutation below — DEC-021 resolves DEC-006 by routing all
+// task history through this one table instead of overloading updated_at.
+// Best-effort: a logging failure should never roll back or surface as an
+// error on top of an otherwise-successful mutation.
+async function logActivity(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  taskId: string,
+  actorId: string,
+  eventType: string,
+  metadata?: Record<string, unknown>
+) {
+  await supabase
+    .from("task_activity")
+    .insert({ task_id: taskId, actor_id: actorId, event_type: eventType, metadata })
 }
 
 export type MoveTaskInput = {
@@ -93,6 +111,9 @@ export type MoveTaskResult = { error: string } | { success: true }
 
 export async function moveTask(input: MoveTaskInput): Promise<MoveTaskResult> {
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   const { data: columnTasks, error: fetchError } = await supabase
     .from("tasks")
@@ -167,10 +188,195 @@ export async function moveTask(input: MoveTaskInput): Promise<MoveTaskResult> {
     return { error: error.message }
   }
 
+  if (user) {
+    await logActivity(supabase, input.taskId, user.id, "moved", {
+      to: input.status,
+    })
+  }
+
   // No revalidatePath here: moveTask is called directly from client event
   // handlers (drag end, the keyboard "move to" control), not a <form>
   // action, so Next.js does not auto-refresh the route — and the caller's
   // own optimistic state is already the source of truth for this view. A
   // full reload re-fetches fresh data from the database regardless (AC-5).
   return { success: true }
+}
+
+export type EditTaskState =
+  | { error: string }
+  | { success: true; task: { id: string; title: string } }
+  | undefined
+
+export async function editTask(
+  _prevState: EditTaskState,
+  formData: FormData
+): Promise<EditTaskState> {
+  const taskId = String(formData.get("taskId") ?? "")
+  const title = String(formData.get("title") ?? "").trim()
+
+  if (!taskId) {
+    return { error: "Missing task." }
+  }
+  if (!title) {
+    return { error: "Task title is required." }
+  }
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "You must be signed in to edit a task." }
+  }
+
+  const { data: previousTask } = await supabase
+    .from("tasks")
+    .select("title")
+    .eq("id", taskId)
+    .maybeSingle()
+
+  const { data: updatedTask, error } = await supabase
+    .from("tasks")
+    .update({ title })
+    .eq("id", taskId)
+    .select("id, title")
+    .single()
+
+  if (error || !updatedTask) {
+    return { error: error?.message ?? "Could not update task." }
+  }
+
+  if (previousTask && previousTask.title !== title) {
+    await logActivity(supabase, taskId, user.id, "edited", {
+      field: "title",
+      from: previousTask.title,
+      to: title,
+    })
+  }
+
+  revalidatePath("/", "layout")
+  return { success: true, task: updatedTask }
+}
+
+export type ArchiveTaskResult = { error: string } | { success: true }
+
+export async function archiveTask(taskId: string): Promise<ArchiveTaskResult> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "You must be signed in to archive a task." }
+  }
+
+  const { error } = await supabase
+    .from("tasks")
+    .update({ archived_at: new Date().toISOString() })
+    .eq("id", taskId)
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  await logActivity(supabase, taskId, user.id, "archived")
+  revalidatePath("/", "layout")
+  return { success: true }
+}
+
+export async function unarchiveTask(taskId: string): Promise<ArchiveTaskResult> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "You must be signed in to unarchive a task." }
+  }
+
+  const { error } = await supabase
+    .from("tasks")
+    .update({ archived_at: null })
+    .eq("id", taskId)
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  await logActivity(supabase, taskId, user.id, "unarchived")
+  revalidatePath("/", "layout")
+  return { success: true }
+}
+
+export type DeleteTaskResult = { error: string } | { success: true }
+
+export async function deleteTask(taskId: string): Promise<DeleteTaskResult> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "You must be signed in to delete a task." }
+  }
+
+  // No activity log entry: the row (and its task_activity history) is
+  // cascade-deleted together, so there is nothing left to attach a "deleted"
+  // entry to — this is a hard, permanent delete, distinct from archive.
+  const { error } = await supabase.from("tasks").delete().eq("id", taskId)
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath("/", "layout")
+  return { success: true }
+}
+
+export type TaskActivityEntry = {
+  id: string
+  event_type: string
+  metadata: Record<string, unknown> | null
+  created_at: string
+  actor_id: string | null
+}
+
+export async function getTaskActivity(
+  taskId: string
+): Promise<{ error: string } | { success: true; activity: TaskActivityEntry[] }> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from("task_activity")
+    .select("id, event_type, metadata, created_at, actor_id")
+    .eq("task_id", taskId)
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  return { success: true, activity: (data ?? []) as TaskActivityEntry[] }
+}
+
+export type ArchivedTask = { id: string; title: string; status: string }
+
+export async function getArchivedTasks(
+  projectId: string
+): Promise<{ error: string } | { success: true; tasks: ArchivedTask[] }> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from("tasks")
+    .select("id, title, status")
+    .eq("project_id", projectId)
+    .not("archived_at", "is", null)
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  return { success: true, tasks: data ?? [] }
 }

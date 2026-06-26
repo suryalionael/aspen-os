@@ -210,6 +210,19 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
+## Sprint 2 Decisions
+
+### DEC-021 — Dedicated `task_activity` table resolves DEC-006
+**Decision:** Sprint 2 introduces a dedicated `task_activity` table (migration 010) rather than continuing to rely on `tasks.updated_at` as a proxy for "task moved."
+**Rationale:** DEC-006 explicitly flagged this exact moment as its own revisit trigger: "the moment any task-edit feature is scoped... add a dedicated `events` table or a separate `status_changed_at` column." Sprint 2 ships both task editing (Phase A) and an explicit Activity Log feature, so a shared event table resolves both needs at once rather than building two narrower mechanisms.
+**Alternatives Considered:** A single `status_changed_at` column (narrower — would not generalize to comments, label changes, or checklist activity, which Phase A also needs to log).
+**Tradeoffs:** One new table and one new RLS helper (`is_workspace_member_for_task`) versus continuing to overload timestamp columns. `event_type` is left as unconstrained text (not a check constraint like `tasks.status` per DEC-003) since the set of event types will keep growing across Sprint 2 phases — a check constraint would mean a migration per phase.
+**Owner:** Product Engineer
+**Date:** 2026-06-26 (Sprint 2)
+**Future Revisit Conditions:** None anticipated; this table is designed to be reused by every subsequent Sprint 2 feature that needs an audit trail (comments, labels, checklist items).
+
+---
+
 ## Open Items (Not Decisions)
 
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:

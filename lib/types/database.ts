@@ -49,8 +49,44 @@ export type Database = {
           },
         ]
       }
+      task_activity: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json | null
+          task_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          task_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_activity_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
+          archived_at: string | null
           assignee_id: string | null
           created_at: string
           created_by: string
@@ -62,6 +98,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           assignee_id?: string | null
           created_at?: string
           created_by: string
@@ -73,6 +110,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           assignee_id?: string | null
           created_at?: string
           created_by?: string
@@ -180,6 +218,10 @@ export type Database = {
       }
       is_workspace_member_for_project: {
         Args: { p_project_id: string }
+        Returns: boolean
+      }
+      is_workspace_member_for_task: {
+        Args: { p_task_id: string }
         Returns: boolean
       }
     }

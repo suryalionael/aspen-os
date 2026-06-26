@@ -40,6 +40,7 @@ export function TaskCard({
   labels,
   checklistCompleted,
   checklistTotal,
+  commentCount,
   onMove,
   onOpen,
 }: {
@@ -51,6 +52,7 @@ export function TaskCard({
   labels: Label[]
   checklistCompleted: number
   checklistTotal: number
+  commentCount: number
   onMove: (newStatus: string) => void
   onOpen: () => void
 }) {
@@ -103,12 +105,15 @@ export function TaskCard({
           ))}
         </div>
       )}
-      {(dueDate || priority || checklistTotal > 0) && (
+      {(dueDate || priority || checklistTotal > 0 || commentCount > 0) && (
         <div className="flex items-center gap-2">
           {checklistTotal > 0 && (
             <span className="text-xs text-muted-foreground">
               ☑ {checklistCompleted}/{checklistTotal}
             </span>
+          )}
+          {commentCount > 0 && (
+            <span className="text-xs text-muted-foreground">💬 {commentCount}</span>
           )}
           {priority && (
             <span

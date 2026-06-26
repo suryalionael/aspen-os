@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { TaskLabelPicker } from "@/components/kanban/task-label-picker"
 import { TaskChecklist } from "@/components/kanban/task-checklist"
+import { TaskComments } from "@/components/kanban/task-comments"
 import type { Label } from "@/lib/labels"
 import {
   archiveTask,
@@ -78,6 +79,7 @@ const ACTIVITY_LABELS: Record<string, (metadata: Record<string, unknown> | null)
     `Unchecked "${String(metadata?.content ?? "")}"`,
   checklist_item_removed: (metadata) =>
     `Checklist item "${String(metadata?.content ?? "")}" removed`,
+  commented: () => "New comment",
 }
 
 function describeActivity(entry: TaskActivityEntry): string {
@@ -94,6 +96,7 @@ export function TaskDetailDialog({
   onTaskDeleted,
   onLabelsChanged,
   onChecklistChanged,
+  onCommentCountChanged,
 }: {
   taskId: string | null
   open: boolean
@@ -103,6 +106,7 @@ export function TaskDetailDialog({
   onTaskDeleted: (taskId: string) => void
   onLabelsChanged: (taskId: string, labels: Label[]) => void
   onChecklistChanged: (taskId: string, completed: number, total: number) => void
+  onCommentCountChanged: (taskId: string, count: number) => void
 }) {
   const [editState, editAction, editPending] = useActionState(editTask, undefined)
   const [, startTransition] = useTransition()
@@ -320,6 +324,17 @@ export function TaskDetailDialog({
             taskId={taskDetail.id}
             onChanged={(completed, total) => {
               onChecklistChanged(taskDetail.id, completed, total)
+              refetchActivity()
+            }}
+          />
+        </div>
+
+        <div className="border-t border-border pt-3">
+          <h3 className="mb-2 text-sm font-semibold">Comments</h3>
+          <TaskComments
+            taskId={taskDetail.id}
+            onChanged={(count) => {
+              onCommentCountChanged(taskDetail.id, count)
               refetchActivity()
             }}
           />

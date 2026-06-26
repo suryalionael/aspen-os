@@ -26,18 +26,29 @@ export default async function ProjectPage({
   // board as its initial, optimistically-managed state.
   const { data: tasks } = await supabase
     .from("tasks")
-    .select("id, title, status, due_date, priority")
+    .select("id, title, status, due_date, priority, task_labels(labels(id, name, color))")
     .eq("project_id", project.id)
     .is("archived_at", null)
     .order("status", { ascending: true })
     .order("position", { ascending: true })
+
+  const tasksWithLabels = (tasks ?? []).map((task) => ({
+    id: task.id,
+    title: task.title,
+    status: task.status,
+    due_date: task.due_date,
+    priority: task.priority,
+    labels: task.task_labels.flatMap((row) =>
+      Array.isArray(row.labels) ? row.labels : row.labels ? [row.labels] : []
+    ),
+  }))
 
   return (
     <div className="flex flex-1 flex-col">
       <div className="border-b border-border px-6 py-4">
         <h1 className="text-lg font-semibold">{project.name}</h1>
       </div>
-      <KanbanBoard projectId={project.id} initialTasks={tasks ?? []} />
+      <KanbanBoard projectId={project.id} initialTasks={tasksWithLabels} />
     </div>
   )
 }

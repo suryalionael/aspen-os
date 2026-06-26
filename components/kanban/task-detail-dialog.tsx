@@ -1,6 +1,13 @@
 "use client"
 
-import { useActionState, useEffect, useRef, useState, useTransition } from "react"
+import {
+  useActionState,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+} from "react"
 import ReactMarkdown from "react-markdown"
 
 import { Button } from "@/components/ui/button"
@@ -12,6 +19,8 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { TaskLabelPicker } from "@/components/kanban/task-label-picker"
+import type { Label } from "@/lib/labels"
 import {
   archiveTask,
   editTask,
@@ -58,6 +67,8 @@ const ACTIVITY_LABELS: Record<string, (metadata: Record<string, unknown> | null)
   },
   archived: () => "Task archived",
   unarchived: () => "Task restored from archive",
+  label_added: (metadata) => `Label "${String(metadata?.label_name ?? "")}" added`,
+  label_removed: (metadata) => `Label "${String(metadata?.label_name ?? "")}" removed`,
 }
 
 function describeActivity(entry: TaskActivityEntry): string {
@@ -72,6 +83,7 @@ export function TaskDetailDialog({
   onTaskUpdated,
   onTaskArchiveChange,
   onTaskDeleted,
+  onLabelsChanged,
 }: {
   taskId: string | null
   open: boolean
@@ -79,6 +91,7 @@ export function TaskDetailDialog({
   onTaskUpdated: (task: EditedTask) => void
   onTaskArchiveChange: (taskId: string, archivedAt: string | null) => void
   onTaskDeleted: (taskId: string) => void
+  onLabelsChanged: (taskId: string, labels: Label[]) => void
 }) {
   const [editState, editAction, editPending] = useActionState(editTask, undefined)
   const [, startTransition] = useTransition()
@@ -108,6 +121,20 @@ export function TaskDetailDialog({
     })
   }, [open, taskId])
 
+  // The activity panel otherwise only loads once when the dialog opens —
+  // without an explicit refetch, editing, archiving, or relabeling a task
+  // within the same open session would never show up until the dialog was
+  // closed and reopened. Memoized so it can be listed as an effect
+  // dependency without reintroducing the identity-churn loop described
+  // below — its own dependency ([taskId]) only changes when the dialog
+  // targets a different task, not on every render.
+  const refetchActivity = useCallback(() => {
+    if (!taskId) return
+    getTaskActivity(taskId).then((result) => {
+      if ("success" in result) setActivity(result.activity)
+    })
+  }, [taskId])
+
   // Guards against an infinite render loop: onTaskUpdated is a plain
   // closure recreated on every KanbanBoard render (not memoized), so
   // including it in the dependency array means calling it (which updates
@@ -127,8 +154,9 @@ export function TaskDetailDialog({
         previous ? { ...previous, ...editState.task } : previous
       )
       onTaskUpdated(editState.task)
+      refetchActivity()
     }
-  }, [editState, onTaskUpdated])
+  }, [editState, onTaskUpdated, refetchActivity])
 
   if (!taskId || !taskDetail) {
     return (
@@ -152,6 +180,7 @@ export function TaskDetailDialog({
         : await archiveTask(taskDetail!.id)
       if ("success" in result) {
         onTaskArchiveChange(taskDetail!.id, isArchived ? null : new Date().toISOString())
+        refetchActivity()
       }
     })
   }
@@ -250,6 +279,18 @@ export function TaskDetailDialog({
             {editPending ? "Saving…" : "Save"}
           </Button>
         </form>
+
+        <div className="border-t border-border pt-3">
+          <h3 className="mb-2 text-sm font-semibold">Labels</h3>
+          <TaskLabelPicker
+            taskId={taskDetail.id}
+            projectId={taskDetail.project_id}
+            onLabelsChanged={(labels) => {
+              onLabelsChanged(taskDetail.id, labels)
+              refetchActivity()
+            }}
+          />
+        </div>
 
         <div className="flex items-center gap-2 border-t border-border pt-3">
           <Button size="sm" variant="outline" onClick={handleArchiveToggle}>

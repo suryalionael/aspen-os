@@ -11,6 +11,7 @@ import {
 import { arrayMove } from "@dnd-kit/sortable"
 
 import { moveTask, type ArchivedTask, type EditedTask } from "@/lib/actions/tasks"
+import type { Label } from "@/lib/labels"
 import { ArchivedTasksDialog } from "@/components/kanban/archived-tasks-dialog"
 import { KanbanColumn } from "@/components/kanban/kanban-column"
 import { TaskDetailDialog } from "@/components/kanban/task-detail-dialog"
@@ -23,6 +24,7 @@ type Task = {
   status: string
   due_date: string | null
   priority: string | null
+  labels: Label[]
 }
 type TasksByStatus = Record<string, Task[]>
 
@@ -170,7 +172,7 @@ export function KanbanBoard({
   }
 
   function handleTaskCreated(task: { id: string; title: string; status: string }) {
-    const newTask: Task = { ...task, due_date: null, priority: null }
+    const newTask: Task = { ...task, due_date: null, priority: null, labels: [] }
     setTasksByStatus((previous) => ({
       ...previous,
       [task.status]: [...previous[task.status], newTask],
@@ -217,10 +219,26 @@ export function KanbanBoard({
   }
 
   function handleTaskRestored(task: ArchivedTask) {
+    // Labels aren't fetched for archived tasks (kept minimal — see
+    // getArchivedTasks), so a restored card shows its label chips again
+    // after the next full reload rather than instantly. The labels
+    // themselves are never lost; only the card's display lags briefly.
     setTasksByStatus((previous) => ({
       ...previous,
-      [task.status]: [...previous[task.status], task],
+      [task.status]: [...previous[task.status], { ...task, labels: [] }],
     }))
+  }
+
+  function handleLabelsChanged(taskId: string, labels: Label[]) {
+    setTasksByStatus((previous) => {
+      const next: TasksByStatus = { ...previous }
+      for (const status of STATUSES) {
+        next[status] = previous[status].map((task) =>
+          task.id === taskId ? { ...task, labels } : task
+        )
+      }
+      return next
+    })
   }
 
   return (
@@ -258,6 +276,7 @@ export function KanbanBoard({
         onTaskUpdated={handleTaskUpdated}
         onTaskArchiveChange={handleTaskArchiveChange}
         onTaskDeleted={removeTaskFromState}
+        onLabelsChanged={handleLabelsChanged}
       />
     </div>
   )

@@ -2,13 +2,14 @@ import { notFound } from "next/navigation"
 
 import { createClient } from "@/lib/supabase/server"
 import { KanbanBoard } from "@/components/kanban/kanban-board"
+import { ProjectHeader } from "@/components/project/project-header"
 
 export default async function ProjectPage({
   params,
 }: {
   params: Promise<{ workspaceSlug: string; projectId: string }>
 }) {
-  const { projectId } = await params
+  const { projectId, workspaceSlug } = await params
   const supabase = await createClient()
 
   const { data: project } = await supabase
@@ -50,9 +51,11 @@ export default async function ProjectPage({
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="border-b border-border px-6 py-4">
-        <h1 className="text-lg font-semibold">{project.name}</h1>
-      </div>
+      <ProjectHeader
+        projectId={project.id}
+        workspaceSlug={workspaceSlug}
+        initialName={project.name}
+      />
       <KanbanBoard projectId={project.id} initialTasks={tasksWithLabels} />
     </div>
   )

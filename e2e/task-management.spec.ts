@@ -321,3 +321,83 @@ test("checklist items can be added, checked off, and removed", async ({ page }) 
   await page.keyboard.press("Escape")
   await expect(page.getByTestId("task-card").getByText("1/1")).toBeVisible()
 })
+
+/**
+ * Sprint 2 Phase A5: comments — add, edit, and delete, with a live count
+ * on the board card. RLS additionally requires author_id = auth.uid() for
+ * update/delete (migration 016), distinct from the membership-only
+ * gating used by labels/checklist/task_activity.
+ */
+test("comments can be added, edited, and deleted", async ({ page }) => {
+  const unique = Date.now()
+  const email = `e2e-comments-${unique}@example.com`
+  const password = "TestPassword123!"
+
+  await page.goto("/sign-up")
+  await page.getByLabel("Email").fill(email)
+  await page.getByLabel("Password").fill(password)
+  await page.getByRole("button", { name: "Create account" }).click()
+
+  await page.waitForURL("**/workspaces/new")
+  await page.getByLabel("Workspace name").fill(`E2E Workspace ${unique}`)
+  await page.getByRole("button", { name: "Create workspace" }).click()
+
+  await page.waitForURL((url) => /^\/[^/]+$/.test(url.pathname))
+
+  await page.getByRole("button", { name: "New" }).click()
+  await page.getByLabel("Project name").fill(`E2E Project ${unique}`)
+  await page.getByRole("button", { name: "Create project" }).click()
+
+  await page.waitForURL((url) => /^\/[^/]+\/[^/]+$/.test(url.pathname))
+
+  const quickAdd = page.getByPlaceholder("Add a task…")
+  await quickAdd.fill("Task with comments")
+  await quickAdd.press("Enter")
+  await expect(page.getByText("Task with comments")).toBeVisible()
+
+  await page.getByText("Task with comments").click()
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
+  await waitForDialogSettled(page)
+
+  const newComment = page.getByLabel("New comment")
+  await newComment.fill("First comment")
+  const addPersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
+  await page.getByRole("button", { name: "Comment" }).click()
+  await addPersisted
+  await expect(
+    page.getByTestId("comment-item").getByText("First comment")
+  ).toBeVisible()
+  await expect(page.getByText("New comment", { exact: false })).toBeVisible()
+
+  // Board card shows the comment count without needing to reopen.
+  await page.keyboard.press("Escape")
+  await expect(page.getByTestId("task-card").getByText("💬 1")).toBeVisible()
+
+  // Edit it.
+  await page.getByText("Task with comments").click()
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
+  await page.getByRole("button", { name: "Edit comment" }).click()
+  await page.getByLabel("Edit comment").fill("First comment, edited")
+  const editPersisted = page.waitForResponse(
+    (resp) => resp.request().method() === "POST"
+  )
+  await page.getByRole("button", { name: "Save comment" }).click()
+  await editPersisted
+  await expect(
+    page.getByTestId("comment-item").getByText("First comment, edited")
+  ).toBeVisible()
+  await expect(page.getByText("(edited)")).toBeVisible()
+
+  // Delete it and confirm the card's count drops back to zero (no badge).
+  const deletePersisted = page.waitForResponse(
+    (resp) => resp.request().method() === "POST"
+  )
+  await page.getByRole("button", { name: "Delete comment" }).click()
+  await deletePersisted
+  await expect(page.getByTestId("comment-item")).toHaveCount(0)
+
+  await page.keyboard.press("Escape")
+  await expect(
+    page.getByTestId("task-card").getByText("💬", { exact: false })
+  ).toHaveCount(0)
+})

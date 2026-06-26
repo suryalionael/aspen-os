@@ -32,6 +32,7 @@ export function KanbanColumn({
     labels: Label[]
     checklistCompleted: number
     checklistTotal: number
+    commentCount: number
   }[]
   onTaskMove: (taskId: string, newStatus: string) => void
   onTaskCreated: (task: { id: string; title: string; status: string }) => void
@@ -74,6 +75,7 @@ export function KanbanColumn({
                 labels={task.labels}
                 checklistCompleted={task.checklistCompleted}
                 checklistTotal={task.checklistTotal}
+                commentCount={task.commentCount}
                 onMove={(newStatus) => onTaskMove(task.id, newStatus)}
                 onOpen={() => onTaskOpen(task.id)}
               />

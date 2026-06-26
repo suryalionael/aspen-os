@@ -27,6 +27,7 @@ type Task = {
   labels: Label[]
   checklistCompleted: number
   checklistTotal: number
+  commentCount: number
 }
 type TasksByStatus = Record<string, Task[]>
 
@@ -181,6 +182,7 @@ export function KanbanBoard({
       labels: [],
       checklistCompleted: 0,
       checklistTotal: 0,
+      commentCount: 0,
     }
     setTasksByStatus((previous) => ({
       ...previous,
@@ -236,7 +238,13 @@ export function KanbanBoard({
       ...previous,
       [task.status]: [
         ...previous[task.status],
-        { ...task, labels: [], checklistCompleted: 0, checklistTotal: 0 },
+        {
+          ...task,
+          labels: [],
+          checklistCompleted: 0,
+          checklistTotal: 0,
+          commentCount: 0,
+        },
       ],
     }))
   }
@@ -261,6 +269,18 @@ export function KanbanBoard({
           task.id === taskId
             ? { ...task, checklistCompleted: completed, checklistTotal: total }
             : task
+        )
+      }
+      return next
+    })
+  }
+
+  function handleCommentCountChanged(taskId: string, count: number) {
+    setTasksByStatus((previous) => {
+      const next: TasksByStatus = { ...previous }
+      for (const status of STATUSES) {
+        next[status] = previous[status].map((task) =>
+          task.id === taskId ? { ...task, commentCount: count } : task
         )
       }
       return next
@@ -304,6 +324,7 @@ export function KanbanBoard({
         onTaskDeleted={removeTaskFromState}
         onLabelsChanged={handleLabelsChanged}
         onChecklistChanged={handleChecklistChanged}
+        onCommentCountChanged={handleCommentCountChanged}
       />
     </div>
   )

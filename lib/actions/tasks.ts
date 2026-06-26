@@ -82,7 +82,7 @@ export async function createTask(
 // task history through this one table instead of overloading updated_at.
 // Best-effort: a logging failure should never roll back or surface as an
 // error on top of an otherwise-successful mutation.
-async function logActivity(
+export async function logActivity(
   supabase: Awaited<ReturnType<typeof createClient>>,
   taskId: string,
   actorId: string,
@@ -366,6 +366,7 @@ export async function deleteTask(taskId: string): Promise<DeleteTaskResult> {
 
 export type TaskDetail = {
   id: string
+  project_id: string
   title: string
   status: string
   description: string | null
@@ -381,7 +382,7 @@ export async function getTask(
 
   const { data, error } = await supabase
     .from("tasks")
-    .select("id, title, status, description, due_date, priority, archived_at")
+    .select("id, project_id, title, status, description, due_date, priority, archived_at")
     .eq("id", taskId)
     .single()
 

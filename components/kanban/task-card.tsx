@@ -4,6 +4,7 @@ import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 
 import { TaskMoveControl } from "@/components/kanban/task-move-control"
+import { LABEL_COLORS, type Label } from "@/lib/labels"
 
 const PRIORITY_STYLES: Record<string, string> = {
   low: "bg-secondary text-secondary-foreground",
@@ -36,6 +37,7 @@ export function TaskCard({
   status,
   dueDate,
   priority,
+  labels,
   onMove,
   onOpen,
 }: {
@@ -44,6 +46,7 @@ export function TaskCard({
   status: string
   dueDate: string | null
   priority: string | null
+  labels: Label[]
   onMove: (newStatus: string) => void
   onOpen: () => void
 }) {
@@ -81,6 +84,21 @@ export function TaskCard({
         </span>
         <TaskMoveControl status={status} onMove={onMove} />
       </div>
+      {labels.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {labels.map((label) => (
+            <span
+              key={label.id}
+              className={`rounded px-1.5 py-0.5 text-xs font-medium ${
+                LABEL_COLORS.find((option) => option.value === label.color)
+                  ?.className ?? "bg-secondary text-secondary-foreground"
+              }`}
+            >
+              {label.name}
+            </span>
+          ))}
+        </div>
+      )}
       {(dueDate || priority) && (
         <div className="flex items-center gap-2">
           {priority && (

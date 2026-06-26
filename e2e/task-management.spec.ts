@@ -55,6 +55,12 @@ test("edit, archive/restore, and delete all work from the task detail dialog", a
   // --- Archive: the task should disappear from the board ---
   await page.getByText("Renamed task").click()
   await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
+  // Asserts on actual Activity panel content (not just each mutation's own
+  // success response) — see the labels test below for why this matters.
+  await expect(page.getByText("Task created", { exact: false })).toBeVisible()
+  await expect(
+    page.getByText("Title changed to Renamed task", { exact: false })
+  ).toBeVisible()
   const archivePersisted = page.waitForResponse(
     (resp) => resp.request().method() === "POST"
   )
@@ -153,4 +159,81 @@ test("description, due date, and priority can be set and show on the card", asyn
   await expect(page.getByLabel("Description")).toHaveValue("**Important** details here")
   await expect(page.getByLabel("Due date")).toHaveValue("2026-12-31")
   await expect(page.getByLabel("Priority")).toHaveValue("urgent")
+})
+
+/**
+ * Sprint 2 Phase A3: labels — create, attach/detach, and delete, scoped
+ * per project (reusing the existing migration-007/010 RLS helpers).
+ */
+test("labels can be created, attached to a task, and removed", async ({ page }) => {
+  const unique = Date.now()
+  const email = `e2e-labels-${unique}@example.com`
+  const password = "TestPassword123!"
+
+  await page.goto("/sign-up")
+  await page.getByLabel("Email").fill(email)
+  await page.getByLabel("Password").fill(password)
+  await page.getByRole("button", { name: "Create account" }).click()
+
+  await page.waitForURL("**/workspaces/new")
+  await page.getByLabel("Workspace name").fill(`E2E Workspace ${unique}`)
+  await page.getByRole("button", { name: "Create workspace" }).click()
+
+  await page.waitForURL((url) => /^\/[^/]+$/.test(url.pathname))
+
+  await page.getByRole("button", { name: "New" }).click()
+  await page.getByLabel("Project name").fill(`E2E Project ${unique}`)
+  await page.getByRole("button", { name: "Create project" }).click()
+
+  await page.waitForURL((url) => /^\/[^/]+\/[^/]+$/.test(url.pathname))
+
+  const quickAdd = page.getByPlaceholder("Add a task…")
+  await quickAdd.fill("Task with labels")
+  await quickAdd.press("Enter")
+  await expect(page.getByText("Task with labels")).toBeVisible()
+
+  await page.getByText("Task with labels").click()
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
+
+  // Create a new label.
+  await page.getByLabel("New label name").fill("Bug")
+  await page.getByLabel("New label color").selectOption("red")
+  const createPersisted = page.waitForResponse(
+    (resp) => resp.request().method() === "POST"
+  )
+  await page.getByRole("button", { name: "Add" }).click()
+  await createPersisted
+
+  // Attach it to the task.
+  const labelChip = page.getByRole("button", { name: "Bug", exact: true })
+  await expect(labelChip).toBeVisible()
+  const attachPersisted = page.waitForResponse(
+    (resp) => resp.request().method() === "POST"
+  )
+  await labelChip.click()
+  await attachPersisted
+
+  await page.keyboard.press("Escape")
+  // The chip now shows directly on the board card.
+  await expect(page.getByTestId("task-card").getByText("Bug")).toBeVisible()
+
+  // Detach it again from the dialog.
+  await page.getByText("Task with labels").click()
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
+  const detachPersisted = page.waitForResponse(
+    (resp) => resp.request().method() === "POST"
+  )
+  await page.getByRole("button", { name: "Bug", exact: true }).click()
+  await detachPersisted
+
+  // Asserts on actual Activity panel content, not just the mutation's own
+  // success response — a missing GRANT on is_workspace_member_for_task
+  // once let task_activity reads/writes fail silently (logActivity is
+  // intentionally best-effort) while every other assertion still passed.
+  await expect(page.getByText("Task created", { exact: false })).toBeVisible()
+  await expect(page.getByText('Label "Bug" added', { exact: false })).toBeVisible()
+  await expect(page.getByText('Label "Bug" removed', { exact: false })).toBeVisible()
+
+  await page.keyboard.press("Escape")
+  await expect(page.getByTestId("task-card").getByText("Bug")).toHaveCount(0)
 })

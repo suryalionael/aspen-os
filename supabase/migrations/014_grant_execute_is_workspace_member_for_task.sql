@@ -1,0 +1,12 @@
+-- Migration 010/011 revoked execute on is_workspace_member_for_task from
+-- public (matching migration 007's hardening pattern for the other two
+-- helpers) but never re-granted it to authenticated — migration 007 does
+-- both steps together; this one only did the revoke. Confirmed via a real
+-- "permission denied for function is_workspace_member_for_task" error
+-- surfaced by the labels feature, which is the first thing to actually
+-- exercise this helper's RLS policies end-to-end. This also means
+-- task_activity reads/writes (Phase A1's Activity Log) were silently
+-- failing since their introduction — logActivity is intentionally
+-- best-effort and swallows errors, and no test asserted on actual
+-- Activity panel content until this was caught.
+grant execute on function public.is_workspace_member_for_task(uuid) to authenticated;

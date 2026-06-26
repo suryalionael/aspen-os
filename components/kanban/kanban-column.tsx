@@ -5,6 +5,7 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 
 import { TaskCard } from "@/components/kanban/task-card"
 import { TaskCreateInline } from "@/components/kanban/task-create-inline"
+import type { Label } from "@/lib/labels"
 
 const COLUMN_LABELS: Record<string, string> = {
   backlog: "Backlog",
@@ -28,6 +29,7 @@ export function KanbanColumn({
     title: string
     due_date: string | null
     priority: string | null
+    labels: Label[]
   }[]
   onTaskMove: (taskId: string, newStatus: string) => void
   onTaskCreated: (task: { id: string; title: string; status: string }) => void
@@ -67,6 +69,7 @@ export function KanbanColumn({
                 status={status}
                 dueDate={task.due_date}
                 priority={task.priority}
+                labels={task.labels}
                 onMove={(newStatus) => onTaskMove(task.id, newStatus)}
                 onOpen={() => onTaskOpen(task.id)}
               />

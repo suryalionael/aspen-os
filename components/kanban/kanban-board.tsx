@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import {
   DndContext,
   PointerSensor,
@@ -12,10 +12,20 @@ import { arrayMove } from "@dnd-kit/sortable"
 
 import { moveTask, type ArchivedTask, type EditedTask } from "@/lib/actions/tasks"
 import type { Label } from "@/lib/labels"
+import { createClient } from "@/lib/supabase/client"
+import { useToasts } from "@/lib/hooks/use-toasts"
 import { ArchivedTasksDialog } from "@/components/kanban/archived-tasks-dialog"
 import { BoardToolbar, type SortMode } from "@/components/kanban/board-toolbar"
 import { KanbanColumn } from "@/components/kanban/kanban-column"
 import { TaskDetailDialog } from "@/components/kanban/task-detail-dialog"
+import { ToastStack } from "@/components/ui/toast-stack"
+
+// How long a task ID counts as "just changed by this session" after a
+// local mutation — long enough to absorb the round-trip before this same
+// session's own write echoes back over Realtime, short enough that a
+// second, genuinely remote change to the same task shortly after still
+// gets its own toast (DEC-023).
+const SELF_ECHO_WINDOW_MS = 4000
 
 const PRIORITY_ORDER: Record<string, number> = {
   urgent: 0,
@@ -64,6 +74,185 @@ export function KanbanBoard({
   const [priorityFilter, setPriorityFilter] = useState("")
   const [labelFilter, setLabelFilter] = useState("")
   const [sortMode, setSortMode] = useState<SortMode>("manual")
+  const { toasts, pushToast } = useToasts()
+  const recentlyTouched = useRef<Map<string, number>>(new Map())
+
+  function markTouched(taskId: string) {
+    recentlyTouched.current.set(taskId, Date.now())
+  }
+
+  function wasRecentlyTouched(taskId: string) {
+    const touchedAt = recentlyTouched.current.get(taskId)
+    return Boolean(touchedAt) && Date.now() - touchedAt! < SELF_ECHO_WINDOW_MS
+  }
+
+  // DEC-023: a Realtime subscription is genuinely new client-state scope
+  // beyond DEC-008's drag-and-drop-only carve-out — other sessions editing
+  // this same project now show up live. Realtime payloads only carry the
+  // raw tasks row, not the labels/checklist/comment joins used for the
+  // initial bulk fetch, so a remotely-created or -restored task starts
+  // with those at zero/empty until the next full reload (the same
+  // accepted display-lag tradeoff already used for restored tasks).
+  useEffect(() => {
+    const supabase = createClient()
+    let cancelled = false
+    let channel: ReturnType<typeof supabase.channel> | null = null
+
+    // Per Supabase's docs ("Custom tokens" section of the Postgres
+    // Changes guide): the auth token must be set on the Realtime client
+    // before connecting to a channel, not after. createBrowserClient
+    // doesn't appear to apply the current session to Realtime on its
+    // own quickly enough — without this explicit, awaited setAuth call
+    // first, the channel reaches SUBSCRIBED but silently never receives
+    // any postgres_changes events (confirmed directly: zero events
+    // arrived even after 30s, with no error, until this fix was added).
+    supabase.auth.getSession().then(({ data }) => {
+      if (cancelled) return
+      if (data.session) {
+        supabase.realtime.setAuth(data.session.access_token)
+      }
+      channel = buildChannel(data.session?.user.id ?? null)
+    })
+
+    function buildChannel(currentUserId: string | null) {
+      return supabase
+        .channel(`tasks-${projectId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "tasks",
+            filter: `project_id=eq.${projectId}`,
+          },
+          (payload) => {
+            if (payload.eventType === "INSERT") {
+              const row = payload.new as {
+                created_by: string
+                id: string
+                title: string
+                status: string
+                due_date: string | null
+                priority: string | null
+                archived_at: string | null
+              }
+              if (row.archived_at) return
+
+              // created_by is timing-independent, unlike the touched-
+              // tracking used for UPDATE/DELETE below: for a freshly
+              // created task, this Realtime event can arrive over the
+              // already-open websocket before this same browser's own
+              // createTask Server Action call even returns (confirmed
+              // directly — a task could appear twice and toast its own
+              // creation to itself before this fix), so "was this
+              // recently touched by me" can't be evaluated correctly
+              // yet at the moment this fires. Whether the row already
+              // exists locally is reliable regardless of which path
+              // (Realtime or the local quick-add callback) wins the race.
+              let added = false
+              setTasksByStatus((previous) => {
+                const alreadyPresent = STATUSES.some((status) =>
+                  previous[status].some((task) => task.id === row.id)
+                )
+                if (alreadyPresent) return previous
+                added = true
+                const newTask: Task = {
+                  id: row.id,
+                  title: row.title,
+                  status: row.status,
+                  due_date: row.due_date,
+                  priority: row.priority,
+                  labels: [],
+                  checklistCompleted: 0,
+                  checklistTotal: 0,
+                  commentCount: 0,
+                }
+                return {
+                  ...previous,
+                  [row.status]: [...previous[row.status], newTask],
+                }
+              })
+              if (added && row.created_by !== currentUserId) {
+                pushToast(`New task: ${row.title}`)
+              }
+              return
+            }
+
+          if (payload.eventType === "UPDATE") {
+            const row = payload.new as {
+              id: string
+              title: string
+              status: string
+              due_date: string | null
+              priority: string | null
+              archived_at: string | null
+            }
+            const touched = wasRecentlyTouched(row.id)
+
+            setTasksByStatus((previous) => {
+              let existing: Task | undefined
+              const stripped: TasksByStatus = {
+                backlog: [],
+                todo: [],
+                in_progress: [],
+                done: [],
+              }
+              for (const status of STATUSES) {
+                for (const task of previous[status]) {
+                  if (task.id === row.id) {
+                    existing = task
+                  } else {
+                    stripped[status].push(task)
+                  }
+                }
+              }
+
+              if (row.archived_at) return stripped
+
+              const merged: Task = existing
+                ? {
+                    ...existing,
+                    title: row.title,
+                    status: row.status,
+                    due_date: row.due_date,
+                    priority: row.priority,
+                  }
+                : {
+                    id: row.id,
+                    title: row.title,
+                    status: row.status,
+                    due_date: row.due_date,
+                    priority: row.priority,
+                    labels: [],
+                    checklistCompleted: 0,
+                    checklistTotal: 0,
+                    commentCount: 0,
+                  }
+              stripped[row.status] = [...stripped[row.status], merged]
+              return stripped
+            })
+
+            if (!touched) pushToast(`Task updated: ${row.title}`)
+            return
+          }
+
+            if (payload.eventType === "DELETE") {
+              const oldRow = payload.old as { id: string }
+              const touched = wasRecentlyTouched(oldRow.id)
+              removeTaskFromState(oldRow.id)
+              if (!touched) pushToast("A task was deleted")
+            }
+          }
+        )
+        .subscribe()
+    }
+
+    return () => {
+      cancelled = true
+      if (channel) supabase.removeChannel(channel)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
 
   const allLabels = useMemo(() => {
     const seen = new Map<string, Label>()
@@ -133,6 +322,7 @@ export function KanbanBoard({
 
     setTasksByStatus(nextState)
     setError(null)
+    markTouched(taskId)
 
     startTransition(async () => {
       const result = await moveTask({
@@ -245,6 +435,7 @@ export function KanbanBoard({
   }
 
   function handleTaskCreated(task: { id: string; title: string; status: string }) {
+    markTouched(task.id)
     const newTask: Task = {
       ...task,
       due_date: null,
@@ -254,13 +445,25 @@ export function KanbanBoard({
       checklistTotal: 0,
       commentCount: 0,
     }
-    setTasksByStatus((previous) => ({
-      ...previous,
-      [task.status]: [...previous[task.status], newTask],
-    }))
+    setTasksByStatus((previous) => {
+      // The Realtime echo of this same INSERT can arrive over the
+      // websocket before this Server Action's own HTTP response gets
+      // back to the client — confirmed directly, not theoretical — so
+      // this local path needs the same "already present" guard the
+      // Realtime handler uses, or the task gets added twice.
+      const alreadyPresent = STATUSES.some((status) =>
+        previous[status].some((existing) => existing.id === task.id)
+      )
+      if (alreadyPresent) return previous
+      return {
+        ...previous,
+        [task.status]: [...previous[task.status], newTask],
+      }
+    })
   }
 
   function removeTaskFromState(taskId: string) {
+    markTouched(taskId)
     setTasksByStatus((previous) => {
       const next: TasksByStatus = { ...previous }
       for (const status of STATUSES) {
@@ -271,6 +474,7 @@ export function KanbanBoard({
   }
 
   function handleTaskUpdated(updated: EditedTask) {
+    markTouched(updated.id)
     setTasksByStatus((previous) => {
       const next: TasksByStatus = { ...previous }
       for (const status of STATUSES) {
@@ -293,6 +497,7 @@ export function KanbanBoard({
     // The board never displays archived tasks (see app/(dashboard) project
     // page query), so the moment a task is archived from its detail
     // dialog, it leaves this client state and the dialog closes.
+    markTouched(taskId)
     if (archivedAt) {
       removeTaskFromState(taskId)
       setOpenTaskId(null)
@@ -413,6 +618,7 @@ export function KanbanBoard({
         onChecklistChanged={handleChecklistChanged}
         onCommentCountChanged={handleCommentCountChanged}
       />
+      <ToastStack toasts={toasts} />
     </div>
   )
 }

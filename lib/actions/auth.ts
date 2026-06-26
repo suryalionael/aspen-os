@@ -7,6 +7,20 @@ import { createClient } from "@/lib/supabase/server"
 
 export type AuthActionState = { error: string } | undefined
 
+// Confirmed directly: under a burst of concurrent sign-ups (e.g. parallel
+// Playwright runs), Supabase Auth can return an error whose .message is
+// the literal string "{}" rather than real text — rendered as-is, this
+// shows the user a useless "{}" instead of any explanation. This doesn't
+// fix the underlying rate limit (an external-service condition, not an
+// application bug), only the confusing message shown when it happens.
+function formatAuthError(error: { message: string }): string {
+  const message = error.message?.trim()
+  if (!message || message.startsWith("{")) {
+    return "Something went wrong. Please try again in a moment."
+  }
+  return message
+}
+
 export async function signUp(
   _prevState: AuthActionState,
   formData: FormData
@@ -22,7 +36,7 @@ export async function signUp(
   const { data, error } = await supabase.auth.signUp({ email, password })
 
   if (error) {
-    return { error: error.message }
+    return { error: formatAuthError(error) }
   }
 
   // DEC-014: email confirmation must be disabled on the Supabase project so
@@ -53,7 +67,7 @@ export async function signIn(
   const { error } = await supabase.auth.signInWithPassword({ email, password })
 
   if (error) {
-    return { error: error.message }
+    return { error: formatAuthError(error) }
   }
 
   redirect("/")
@@ -95,7 +109,7 @@ export async function requestPasswordReset(
   })
 
   if (error) {
-    return { error: error.message }
+    return { error: formatAuthError(error) }
   }
 
   // Always returns success regardless of whether the email is registered —
@@ -120,7 +134,7 @@ export async function updatePassword(
   const { error } = await supabase.auth.updateUser({ password })
 
   if (error) {
-    return { error: error.message }
+    return { error: formatAuthError(error) }
   }
 
   redirect("/")

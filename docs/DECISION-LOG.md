@@ -234,6 +234,17 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
+### DEC-023 — Realtime extends client state beyond drag-and-drop; notifications are ephemeral, not persisted
+**Decision:** Phase E adds Supabase Realtime (`postgres_changes`) subscriptions on `tasks` (scoped per project) and `comments` (scoped per task), so changes from other sessions appear without a manual reload. Notifications are transient, session-local toasts triggered by those same subscriptions — not a persisted notification log or center.
+**Rationale:** DEC-008 scoped client-side state to "only the Kanban board's optimistic drag-and-drop interaction"; receiving remote changes live is a genuinely new category of client state, not a variation of the existing one, so it's recorded here rather than silently expanding DEC-008's stated scope. A persisted notification system would duplicate `task_activity` (DEC-021) and overlap with Phase F's dashboard "recent activity" — building both would be redundant scope, not two complementary features.
+**Alternatives Considered:** Polling instead of Realtime (simpler, but defeats the actual point of "live" updates); a persisted, markable-read notifications table (rejected for this sprint as redundant with task_activity).
+**Tradeoffs:** A board open in two tabs/sessions now needs to merge two sources of truth (local optimistic state and remote events) by task ID rather than only ever trusting its own writes — done by always treating the latest known row state as authoritative, so a remote echo of one's own action is a harmless no-op rather than a conflict. Toasts disappear on their own and aren't recoverable if missed, which is an accepted limitation, not an oversight.
+**Owner:** Product Engineer
+**Date:** 2026-06-27 (Sprint 2)
+**Future Revisit Conditions:** Build a persisted notification center only if pilot feedback shows missed ephemeral toasts are a real problem — not preemptively.
+
+---
+
 ## Open Items (Not Decisions)
 
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:

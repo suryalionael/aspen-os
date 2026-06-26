@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "test:rls": "tsx scripts/test-rls.ts",
-    "test:workspace": "tsx scripts/test-workspace.ts"
+    "test:workspace": "tsx scripts/test-workspace.ts",
+    "test:project": "tsx scripts/test-project.ts",
+    "test:task": "tsx scripts/test-task.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.4",

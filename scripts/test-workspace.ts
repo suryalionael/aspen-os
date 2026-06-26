@@ -80,7 +80,11 @@ async function runLiveCollisionCheck(): Promise<void> {
     "expected an immediate session after sign-up (is email confirmation disabled per DEC-014?)"
   )
 
-  const name = "Volunteers"
+  // Unique per run: a fixed name would collide with this same script's own
+  // leftover data from a prior run (workspaces aren't cleaned up after the
+  // test completes), causing a false failure on the "should succeed"
+  // first attempt instead of the intentional second one.
+  const name = `Volunteers ${Date.now()}`
   const baseSlug = slugify(name)
 
   const { data: first, error: firstError } = await client.rpc(

@@ -6,8 +6,16 @@ import { getSupabaseEnv } from "@/lib/supabase/env"
 // Routes reachable while signed out. Everything else is protected by
 // default — new routes added in later phases (e.g. workspace/project pages)
 // are automatically gated without needing another middleware change.
-const PUBLIC_PATHS = new Set(["/", "/sign-in", "/sign-up"])
-const AUTH_PATHS = new Set(["/sign-in", "/sign-up"])
+// /auth/confirm is the password-recovery link's landing route — it must be
+// reachable before a session exists, since establishing one is its job.
+const PUBLIC_PATHS = new Set([
+  "/",
+  "/sign-in",
+  "/sign-up",
+  "/forgot-password",
+  "/auth/confirm",
+])
+const AUTH_PATHS = new Set(["/sign-in", "/sign-up", "/forgot-password"])
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })

@@ -89,3 +89,68 @@ test("edit, archive/restore, and delete all work from the task detail dialog", a
   await page.getByRole("button", { name: "Archived" }).click()
   await expect(page.getByText("No archived tasks")).toBeVisible()
 })
+
+/**
+ * Sprint 2 Phase A2: description (Markdown), due date, and priority,
+ * edited together in the same detail-dialog form as the title.
+ */
+test("description, due date, and priority can be set and show on the card", async ({
+  page,
+}) => {
+  const unique = Date.now()
+  const email = `e2e-taskfields-${unique}@example.com`
+  const password = "TestPassword123!"
+
+  await page.goto("/sign-up")
+  await page.getByLabel("Email").fill(email)
+  await page.getByLabel("Password").fill(password)
+  await page.getByRole("button", { name: "Create account" }).click()
+
+  await page.waitForURL("**/workspaces/new")
+  await page.getByLabel("Workspace name").fill(`E2E Workspace ${unique}`)
+  await page.getByRole("button", { name: "Create workspace" }).click()
+
+  await page.waitForURL((url) => /^\/[^/]+$/.test(url.pathname))
+
+  await page.getByRole("button", { name: "New" }).click()
+  await page.getByLabel("Project name").fill(`E2E Project ${unique}`)
+  await page.getByRole("button", { name: "Create project" }).click()
+
+  await page.waitForURL((url) => /^\/[^/]+\/[^/]+$/.test(url.pathname))
+
+  const quickAdd = page.getByPlaceholder("Add a task…")
+  await quickAdd.fill("Task with fields")
+  await quickAdd.press("Enter")
+  await expect(page.getByText("Task with fields")).toBeVisible()
+
+  await page.getByText("Task with fields").click()
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
+
+  await page.getByLabel("Description").fill("**Important** details here")
+  // The live Markdown preview renders the bold text without the ** markers.
+  await expect(page.getByText("Important details here")).toBeVisible()
+
+  await page.getByLabel("Due date").fill("2026-12-31")
+  await page.getByLabel("Priority").selectOption("urgent")
+
+  const savePersisted = page.waitForResponse(
+    (resp) => resp.request().method() === "POST"
+  )
+  await page.getByRole("button", { name: "Save" }).click()
+  await savePersisted
+  await page.keyboard.press("Escape")
+
+  // The card itself shows the priority badge and due date without
+  // needing to reopen the dialog.
+  await expect(page.getByText("Urgent")).toBeVisible()
+  await expect(page.getByText("Due 12/31/2026")).toBeVisible()
+
+  // Reopening confirms the fields persisted server-side, not just in the
+  // optimistic client state.
+  await page.reload()
+  await page.getByText("Task with fields").click()
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
+  await expect(page.getByLabel("Description")).toHaveValue("**Important** details here")
+  await expect(page.getByLabel("Due date")).toHaveValue("2026-12-31")
+  await expect(page.getByLabel("Priority")).toHaveValue("urgent")
+})

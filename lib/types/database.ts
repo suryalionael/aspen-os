@@ -90,8 +90,11 @@ export type Database = {
           assignee_id: string | null
           created_at: string
           created_by: string
+          description: string | null
+          due_date: string | null
           id: string
           position: number
+          priority: string | null
           project_id: string
           status: string
           title: string
@@ -102,8 +105,11 @@ export type Database = {
           assignee_id?: string | null
           created_at?: string
           created_by: string
+          description?: string | null
+          due_date?: string | null
           id?: string
           position: number
+          priority?: string | null
           project_id: string
           status?: string
           title: string
@@ -114,8 +120,11 @@ export type Database = {
           assignee_id?: string | null
           created_at?: string
           created_by?: string
+          description?: string | null
+          due_date?: string | null
           id?: string
           position?: number
+          priority?: string | null
           project_id?: string
           status?: string
           title?: string

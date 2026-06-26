@@ -75,7 +75,15 @@ test("drag-and-drop and keyboard fallback both move a task, and both persist aft
     targetBox.y + targetBox.height / 2,
     { steps: 10 }
   )
+  // kanban-board.tsx's commitMove updates the board optimistically and
+  // persists via moveTask in the background (startTransition), so the
+  // response listener must be registered before mouse.up() fires it —
+  // otherwise a reload can race the write and read back stale state.
+  const dragPersisted = page.waitForResponse(
+    (resp) => resp.request().method() === "POST"
+  )
   await page.mouse.up()
+  await dragPersisted
 
   await expect(
     page.getByTestId("column-in_progress").getByText("Drag me to In Progress")
@@ -85,7 +93,11 @@ test("drag-and-drop and keyboard fallback both move a task, and both persist aft
   const keyboardCard = page
     .getByTestId("task-card")
     .filter({ hasText: "Move me with the keyboard" })
+  const keyboardMovePersisted = page.waitForResponse(
+    (resp) => resp.request().method() === "POST"
+  )
   await keyboardCard.getByLabel("Move task to column").selectOption("done")
+  await keyboardMovePersisted
 
   await expect(
     page.getByTestId("column-done").getByText("Move me with the keyboard")

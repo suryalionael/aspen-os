@@ -19,12 +19,14 @@ export function KanbanColumn({
   tasks,
   onTaskMove,
   onTaskCreated,
+  onTaskOpen,
 }: {
   status: string
   projectId: string
   tasks: { id: string; title: string }[]
   onTaskMove: (taskId: string, newStatus: string) => void
   onTaskCreated: (task: { id: string; title: string; status: string }) => void
+  onTaskOpen: (taskId: string) => void
 }) {
   // The column itself is a drop target (id = status) so dropping on empty
   // space — not just on another card — registers correctly.
@@ -59,6 +61,7 @@ export function KanbanColumn({
                 title={task.title}
                 status={status}
                 onMove={(newStatus) => onTaskMove(task.id, newStatus)}
+                onOpen={() => onTaskOpen(task.id)}
               />
             ))}
           </div>

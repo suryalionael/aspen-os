@@ -28,6 +28,7 @@ export default async function ProjectPage({
     .from("tasks")
     .select("id, title, status")
     .eq("project_id", project.id)
+    .is("archived_at", null)
     .order("status", { ascending: true })
     .order("position", { ascending: true })
 

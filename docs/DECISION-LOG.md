@@ -385,6 +385,17 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
+### DEC-038 — Sentry and rate limiting deferred again; everything else in Phase P shipped
+**Decision:** Phase P's CI (GitHub Actions: type-check/lint/build → DB tests + E2E → deploy-on-main), security review, and backup/disaster-recovery documentation are complete — see `docs/CI-AND-DEPLOYMENT.md`. Sentry (error monitoring) and rate limiting are explicitly **not** implemented this sprint; confirmed with the product owner (2026-06-28) rather than assumed, same as DEC-027's email-provider deferral.
+**Rationale:** Both require creating a third-party account (Sentry, Upstash or similar) this assistant cannot do on the user's behalf. `docs/CI-AND-DEPLOYMENT.md`'s "Operational follow-ups" section documents the exact steps to wire each in once accounts exist, so this isn't lost knowledge — just gated on credentials only the user can provision.
+**Alternatives Considered:** Building a no-account-needed substitute (e.g. an in-memory rate limiter, console.error-based "monitoring") — rejected as a real fix being passed off as one; an in-memory limiter doesn't survive serverless cold starts or work across multiple instances, and console logging isn't monitoring (no alerting, no aggregation, no historical search). Better to clearly mark this undone than to ship something that looks done but isn't.
+**Tradeoffs:** No alerting exists today if production throws unhandled errors — they're only visible by actively checking `vercel logs`/the dashboard. No protection exists against a single account hammering a Server Action (e.g. invite or comment creation) beyond Supabase Auth's own built-in limits on auth-specific endpoints.
+**Owner:** Founder/PM, Product Engineer
+**Date:** 2026-06-28 (Sprint 3)
+**Future Revisit Conditions:** Implement both the moment Sentry/Upstash (or equivalent) accounts exist — see `docs/CI-AND-DEPLOYMENT.md` for the exact integration steps already written.
+
+---
+
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:
 
 - **Single-member workspaces vs. "shared with the whole team" messaging** (see DEC-011 / audit C-2) — needs an explicit Founder/PM call before pilot messaging goes out.

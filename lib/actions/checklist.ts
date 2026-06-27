@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 
 import { createClient } from "@/lib/supabase/server"
 import { logActivity } from "@/lib/actions/tasks"
+import { createNotification, getTaskNotificationContext } from "@/lib/actions/notifications"
 import { computePosition } from "@/lib/utils/position"
 
 export type ChecklistItem = {
@@ -108,6 +109,40 @@ export async function toggleChecklistItem(
     completed ? "checklist_item_completed" : "checklist_item_reopened",
     { content: data.content }
   )
+
+  if (completed) {
+    // Only notify when THIS toggle is the one that completed the whole
+    // checklist — checking after the update above means the just-toggled
+    // item is already counted as completed in this query.
+    const { data: items } = await supabase
+      .from("checklist_items")
+      .select("completed")
+      .eq("task_id", taskId)
+    const allCompleted = (items ?? []).length > 0 && (items ?? []).every((item) => item.completed)
+
+    if (allCompleted) {
+      const context = await getTaskNotificationContext(supabase, taskId)
+      if (context) {
+        const recipients = new Set(
+          [context.assigneeId, context.createdBy].filter(
+            (id): id is string => Boolean(id) && id !== user.id
+          )
+        )
+        for (const recipientId of recipients) {
+          await createNotification(supabase, {
+            userId: recipientId,
+            actorId: user.id,
+            workspaceId: context.workspaceId,
+            projectId: context.projectId,
+            taskId,
+            type: "checklist_completed",
+            message: `Checklist completed on "${context.title}"`,
+          })
+        }
+      }
+    }
+  }
+
   revalidatePath("/", "layout")
   return { success: true }
 }

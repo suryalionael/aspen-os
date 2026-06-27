@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 
 import { createClient } from "@/lib/supabase/server"
+import { createNotification } from "@/lib/actions/notifications"
 import {
   computePosition,
   needsRebalance,
@@ -250,7 +251,7 @@ export async function editTask(
 
   const { data: previousTask } = await supabase
     .from("tasks")
-    .select("title, description, due_date, priority, assignee_id")
+    .select("title, description, due_date, priority, assignee_id, project_id")
     .eq("id", taskId)
     .maybeSingle()
 
@@ -290,6 +291,29 @@ export async function editTask(
 
     for (const change of changes) {
       await logActivity(supabase, taskId, user.id, "edited", change)
+    }
+
+    // Notify the new assignee — not on every edit, only when assignee_id
+    // actually changed to a new, non-null value (already guaranteed by
+    // the `changes` filter above finding it in the diff).
+    const assigneeChange = changes.find((change) => change.field === "assignee_id")
+    if (assigneeChange && updatedTask.assignee_id) {
+      const { data: project } = await supabase
+        .from("projects")
+        .select("workspace_id")
+        .eq("id", previousTask.project_id)
+        .maybeSingle()
+      if (project) {
+        await createNotification(supabase, {
+          userId: updatedTask.assignee_id,
+          actorId: user.id,
+          workspaceId: project.workspace_id,
+          projectId: previousTask.project_id,
+          taskId,
+          type: "assigned",
+          message: `You were assigned to "${updatedTask.title}"`,
+        })
+      }
     }
   }
 

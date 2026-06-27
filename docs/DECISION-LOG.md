@@ -298,6 +298,26 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
+### DEC-029 — Persisted notification center (revisits and supersedes DEC-023's deferral)
+**Decision:** Phase K adds a real, persisted, recipient-scoped `notifications` table (migration 024) with a bell/badge/mark-read UI — exactly what DEC-023 (Sprint 2) deferred, reasoning it would duplicate `task_activity`. This explicit Sprint 3 request supersedes that deferral.
+**Rationale:** The two are genuinely distinct once actually built: `task_activity` is an append-only, task-scoped audit trail visible to every workspace member; `notifications` is recipient-scoped, carries read/unread state, and exists specifically to be acted on by one person. Triggers: assignment (editTask), comments (addComment — both the assignee/creator and any @mentioned member), and checklist completion (toggleChecklistItem, only on the toggle that completes the last item). "Due today" has no time-based trigger available (no cron infra exists in this stack — see Phase P), so it's generated lazily by the bell itself on load via `checkDueTodayNotifications`, scanning the caller's own assigned tasks due today.
+**Alternatives Considered:** A real cron/scheduled function for due-today (rejected for this phase — no scheduling infra exists yet; revisit if Phase P adds one). Mention autocomplete UI (rejected — DEC-030 covers the simpler approach taken instead).
+**Tradeoffs:** Due-today notifications only appear once a logged-in member with that workspace open loads the bell that day — there's no proactive push if nobody opens the app. A partial unique index on `(user_id, task_id) where type = 'due_today'` means a task is only ever notified-due-today once per task, not once per calendar day it remains due (deliberate — avoids spam, see the migration 025 entry below).
+**Owner:** Product Engineer
+**Date:** 2026-06-28 (Sprint 3)
+**Future Revisit Conditions:** Add a real scheduled job for due-today (and possibly overdue-reminder) notifications once Phase P establishes scheduling/cron infrastructure.
+
+### DEC-030 — @mentions detect exact member emails typed in comments; no autocomplete picker
+**Decision:** The "mentioned" notification trigger scans new comment text for any workspace member's exact email address and notifies that member — there's no `@`-triggered autocomplete UI for inserting a mention.
+**Rationale:** A real mention-picker (type `@`, see a filtered dropdown, insert a styled chip) is a substantial UI feature on its own; plain email detection delivers the actual user value (the mentioned person gets notified) at a fraction of the cost, consistent with "avoid overengineering."
+**Alternatives Considered:** A full autocomplete mention picker (rejected for this phase — disproportionate scope for an MVP; revisit if pilot feedback specifically asks for it).
+**Tradeoffs:** Users must know and type a teammate's exact email to mention them — no name-based or partial matching.
+**Owner:** Product Engineer
+**Date:** 2026-06-28 (Sprint 3)
+**Future Revisit Conditions:** Build a real autocomplete picker if pilot feedback shows the exact-email requirement is a real friction point.
+
+---
+
 ## Open Items (Not Decisions)
 
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:

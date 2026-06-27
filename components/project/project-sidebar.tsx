@@ -4,6 +4,7 @@ import { ProjectCreateDialog } from "@/components/project/project-create-dialog"
 import { ProjectFavoriteButton } from "@/components/project/project-favorite-button"
 import { ArchivedProjectsDialog } from "@/components/project/archived-projects-dialog"
 import { WorkspaceMembersDialog } from "@/components/workspace/workspace-members-dialog"
+import { NotificationBell } from "@/components/notifications/notification-bell"
 
 type Project = { id: string; name: string; isFavorite: boolean }
 
@@ -47,7 +48,10 @@ export function ProjectSidebar({
         <h2 className="text-sm font-semibold text-muted-foreground">
           Workspace
         </h2>
-        <WorkspaceMembersDialog workspaceId={workspaceId} currentUserRole={currentUserRole} />
+        <div className="flex items-center gap-1">
+          <NotificationBell workspaceId={workspaceId} workspaceSlug={workspaceSlug} />
+          <WorkspaceMembersDialog workspaceId={workspaceId} currentUserRole={currentUserRole} />
+        </div>
       </div>
 
       {favorites.length > 0 && (

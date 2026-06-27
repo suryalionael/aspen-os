@@ -30,7 +30,6 @@ export function AvatarUpload({ initialAvatarUrl }: { initialAvatarUrl: string | 
           alt=""
           width={56}
           height={56}
-          unoptimized
           className="size-14 rounded-full object-cover"
         />
       ) : (

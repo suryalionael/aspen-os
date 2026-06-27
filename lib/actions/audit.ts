@@ -39,23 +39,47 @@ export type AuditLogEntry = {
   createdAt: string
 }
 
+const DEFAULT_PAGE_SIZE = 30
+
+// Keyset (cursor) pagination, not offset — stable under concurrent
+// inserts (a new entry landing between pages can't shift an offset-based
+// page boundary and duplicate/skip a row the way it could with
+// .range()). The cursor is the last-seen row's created_at; since
+// created_at isn't unique, ties are broken by id to guarantee a total
+// order and avoid skipping/repeating rows written in the same instant.
 export async function getAuditLog(
   workspaceId: string,
-  filters?: { actorId?: string; action?: string; startDate?: string; endDate?: string }
-): Promise<{ error: string } | { success: true; entries: AuditLogEntry[] }> {
+  filters?: {
+    actorId?: string
+    action?: string
+    startDate?: string
+    endDate?: string
+    cursor?: { createdAt: string; id: string }
+    pageSize?: number
+  }
+): Promise<
+  { error: string } | { success: true; entries: AuditLogEntry[]; hasMore: boolean }
+> {
   const supabase = await createClient()
+  const pageSize = filters?.pageSize ?? DEFAULT_PAGE_SIZE
 
   let query = supabase
     .from("audit_log")
     .select("id, actor_id, action, target_label, metadata, created_at")
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false })
-    .limit(200)
+    .order("id", { ascending: false })
+    .limit(pageSize + 1)
 
   if (filters?.actorId) query = query.eq("actor_id", filters.actorId)
   if (filters?.action) query = query.eq("action", filters.action)
   if (filters?.startDate) query = query.gte("created_at", filters.startDate)
   if (filters?.endDate) query = query.lte("created_at", `${filters.endDate}T23:59:59.999Z`)
+  if (filters?.cursor) {
+    query = query.or(
+      `created_at.lt.${filters.cursor.createdAt},and(created_at.eq.${filters.cursor.createdAt},id.lt.${filters.cursor.id})`
+    )
+  }
 
   const { data, error } = await query
 
@@ -73,7 +97,10 @@ export async function getAuditLog(
     ])
   )
 
-  const entries: AuditLogEntry[] = (data ?? []).map((row) => ({
+  const hasMore = (data ?? []).length > pageSize
+  const page = hasMore ? data!.slice(0, pageSize) : data ?? []
+
+  const entries: AuditLogEntry[] = page.map((row) => ({
     id: row.id,
     actorId: row.actor_id,
     actorEmail: row.actor_id ? emailByUserId.get(row.actor_id) ?? null : null,
@@ -83,7 +110,7 @@ export async function getAuditLog(
     createdAt: row.created_at,
   }))
 
-  return { success: true, entries }
+  return { success: true, entries, hasMore }
 }
 
 function escapeCsvCell(value: string): string {
@@ -96,7 +123,7 @@ function escapeCsvCell(value: string): string {
 export async function exportAuditLogCsv(
   workspaceId: string
 ): Promise<{ error: string } | { success: true; csv: string }> {
-  const result = await getAuditLog(workspaceId)
+  const result = await getAuditLog(workspaceId, { pageSize: 1000 })
   if ("error" in result) return result
 
   const header = ["created_at", "actor_email", "action", "target_label"]

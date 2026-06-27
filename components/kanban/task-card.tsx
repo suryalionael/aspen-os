@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 
@@ -43,7 +44,15 @@ function isOverdue(dateStr: string, status: string): boolean {
   return due < today
 }
 
-export function TaskCard({
+// Memoized — a Kanban board re-renders all its cards on any task mutation
+// (tasksByStatus is one object covering every column), so without this
+// every card in every column would re-render whenever any single task
+// changed. Takes `id` and dispatches through it (onMove(id, status),
+// onOpen(id)) rather than receiving pre-bound per-card closures, so the
+// parent can pass the same stable function reference to every card
+// instead of a fresh closure each render — required for memo's shallow
+// prop comparison to actually skip anything.
+export const TaskCard = memo(function TaskCard({
   id,
   title,
   status,
@@ -67,8 +76,8 @@ export function TaskCard({
   checklistCompleted: number
   checklistTotal: number
   commentCount: number
-  onMove: (newStatus: string) => void
-  onOpen: () => void
+  onMove: (id: string, newStatus: string) => void
+  onOpen: (id: string) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id })
@@ -97,12 +106,12 @@ export function TaskCard({
         <span
           {...attributes}
           {...listeners}
-          onClick={onOpen}
+          onClick={() => onOpen(id)}
           className="flex-1 cursor-grab select-none"
         >
           {title}
         </span>
-        <TaskMoveControl status={status} onMove={onMove} />
+        <TaskMoveControl status={status} onMove={(newStatus) => onMove(id, newStatus)} />
       </div>
       {labels.length > 0 && (
         <div className="flex flex-wrap gap-1">
@@ -157,4 +166,4 @@ export function TaskCard({
       )}
     </div>
   )
-}
+})

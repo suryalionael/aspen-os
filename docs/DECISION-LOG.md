@@ -367,6 +367,24 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
+### DEC-036 — Phase O performance pass: virtualize non-DnD lists only; defer Kanban-column virtualization
+**Decision:** `@tanstack/react-virtual` (user-approved new dependency) is applied to the Archived Tasks dialog and the Audit Log (which also gained real keyset pagination + infinite scroll, replacing its flat 200-row cap). The Kanban board's own task cards are **not** virtualized — `TaskCard` is wrapped in `React.memo` instead, with `onMove`/`onOpen` changed to take `id` and dispatch through a stable parent-owned callback (so the parent can pass one reference to every card instead of a fresh closure each render, which is required for memo's shallow comparison to skip anything).
+**Rationale:** dnd-kit's `SortableContext` and `@tanstack/react-virtual` are a documented-compatible combination in principle, but retrofitting it onto the board's already-thoroughly-debugged drag-and-drop (multiple confirmed root-caused bugs earlier this sprint alone) for a scale concern — hundreds of tasks in one column — that's unlikely for this MVP's actual nonprofit/community-org users is a bad risk/reward trade. The Archived Tasks dialog and Audit Log have no such entanglement and are exactly the kind of "can grow long over time" lists virtualization is for.
+**Alternatives Considered:** Virtualizing the Kanban column unconditionally (rejected — risk to core interaction disproportionate to benefit at this app's scale); a "Load more" button for the audit log instead of true infinite scroll (rejected — the spec explicitly asked for infinite scrolling, and an IntersectionObserver sentinel is barely more code than a button).
+**Tradeoffs:** If a single Kanban column ever does grow into the hundreds of tasks, scrolling that column stays unvirtualized (all cards mounted). Revisit if that actually happens.
+**Owner:** Product Engineer
+**Date:** 2026-06-28 (Sprint 3)
+**Future Revisit Conditions:** Revisit Kanban-column virtualization if real usage shows columns regularly exceeding ~100 tasks.
+
+### DEC-037 — robots.txt/sitemap.xml excluded from auth middleware; home page's Lighthouse SEO score is a known streaming artifact, not a bug
+**Finding:** Lighthouse's SEO audit failed "robots.txt is valid" — confirmed directly: `/robots.txt` had no real route (404) and, worse, the auth middleware redirected the unauthenticated request to `/sign-in` (it wasn't in `PUBLIC_PATHS`). Fixed with real `app/robots.ts`/`app/sitemap.ts` routes and excluding both paths from the middleware matcher entirely (the right fix — these must never go through auth logic, regardless of any path allowlist). The home page (`/`) still scores SEO 91 (vs. 100 on `/sign-in`/`/sign-up`) because Lighthouse's static-markup check doesn't see `<meta name="description">` inside `<head>` in the initial response — Next.js App Router streams an async Server Component's `<head>` content in via a deferred script once its data resolves (here, the signed-in-user redirect check), so the tag is present but not in its "expected" position in the raw HTML.
+**Rationale:** This streaming behavior is intentional, documented Next.js App Router behavior for any async Server Component page, not an application defect — real crawlers that execute JavaScript (Googlebot included) see the tag correctly. Making `/` synchronous to dodge this specific audit would mean moving its signed-in-user redirect into middleware (a real, legitimate refactor) purely to satisfy a synthetic score on the one page whose entire job is to redirect away — disproportionate risk (touching the foundational middleware that gates every route) for a page that isn't the meaningful public surface anyway (`/sign-in`/`/sign-up` already score SEO 100).
+**Owner:** Product Engineer
+**Date:** 2026-06-28 (Sprint 3)
+**Future Revisit Conditions:** Revisit only if real search-engine indexing (not Lighthouse) shows the home page's description genuinely missing — verify via Google Search Console, not Lighthouse, before spending effort here.
+
+---
+
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:
 
 - **Single-member workspaces vs. "shared with the whole team" messaging** (see DEC-011 / audit C-2) — needs an explicit Founder/PM call before pilot messaging goes out.

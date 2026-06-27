@@ -84,8 +84,8 @@ export function KanbanColumn({
                 checklistCompleted={task.checklistCompleted}
                 checklistTotal={task.checklistTotal}
                 commentCount={task.commentCount}
-                onMove={(newStatus) => onTaskMove(task.id, newStatus)}
-                onOpen={() => onTaskOpen(task.id)}
+                onMove={onTaskMove}
+                onOpen={onTaskOpen}
               />
             ))}
           </div>

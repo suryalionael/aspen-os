@@ -125,33 +125,38 @@ export async function leaveWorkspace(
 export type WorkspaceInvite = {
   id: string
   token: string
+  invited_email: string | null
   created_at: string
   revoked_at: string | null
+  accepted_at: string | null
+  declined_at: string | null
 }
 
-export async function getActiveInvite(
+// "Pending invitations" per Phase I — returns every invite for this
+// workspace (not just unresolved ones), since the list is also how an
+// admin/owner sees that an invite was accepted or declined, not only
+// whether a link is still live.
+export async function getPendingInvites(
   workspaceId: string
-): Promise<{ error: string } | { success: true; invite: WorkspaceInvite | null }> {
+): Promise<{ error: string } | { success: true; invites: WorkspaceInvite[] }> {
   const supabase = await createClient()
 
   const { data, error } = await supabase
     .from("workspace_invites")
-    .select("id, token, created_at, revoked_at")
+    .select("id, token, invited_email, created_at, revoked_at, accepted_at, declined_at")
     .eq("workspace_id", workspaceId)
-    .is("revoked_at", null)
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
 
   if (error) {
     return { error: error.message }
   }
 
-  return { success: true, invite: data }
+  return { success: true, invites: data ?? [] }
 }
 
 export async function createInvite(
-  workspaceId: string
+  workspaceId: string,
+  invitedEmail?: string
 ): Promise<{ error: string } | { success: true; invite: WorkspaceInvite }> {
   const supabase = await createClient()
   const {
@@ -164,15 +169,19 @@ export async function createInvite(
 
   const { data, error } = await supabase
     .from("workspace_invites")
-    .insert({ workspace_id: workspaceId, created_by: user.id })
-    .select("id, token, created_at, revoked_at")
+    .insert({
+      workspace_id: workspaceId,
+      created_by: user.id,
+      invited_email: invitedEmail?.trim() || null,
+    })
+    .select("id, token, invited_email, created_at, revoked_at, accepted_at, declined_at")
     .single()
 
   if (error || !data) {
     return {
       error:
         error?.message ??
-        "Could not create an invite link. Only the workspace owner can invite people.",
+        "Could not create an invite link. Only workspace owners and admins can invite people.",
     }
   }
 
@@ -189,6 +198,60 @@ export async function revokeInvite(
     .from("workspace_invites")
     .update({ revoked_at: new Date().toISOString() })
     .eq("id", inviteId)
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath("/", "layout")
+  return { success: true }
+}
+
+export async function declineInvite(
+  token: string
+): Promise<{ error: string } | { success: true }> {
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc("decline_workspace_invite", { p_token: token })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  return { success: true }
+}
+
+export async function changeMemberRole(
+  workspaceId: string,
+  userId: string,
+  role: "admin" | "member"
+): Promise<{ error: string } | { success: true }> {
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc("change_member_role", {
+    p_workspace_id: workspaceId,
+    p_user_id: userId,
+    p_role: role,
+  })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath("/", "layout")
+  return { success: true }
+}
+
+export async function transferOwnership(
+  workspaceId: string,
+  newOwnerId: string
+): Promise<{ error: string } | { success: true }> {
+  const supabase = await createClient()
+
+  const { error } = await supabase.rpc("transfer_workspace_ownership", {
+    p_workspace_id: workspaceId,
+    p_new_owner_id: newOwnerId,
+  })
 
   if (error) {
     return { error: error.message }

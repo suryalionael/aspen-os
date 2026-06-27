@@ -215,6 +215,47 @@ export type Database = {
           },
         ]
       }
+      task_attachments: {
+        Row: {
+          content_type: string | null
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number
+          id: string
+          task_id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          content_type?: string | null
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size: number
+          id?: string
+          task_id: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          content_type?: string | null
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number
+          id?: string
+          task_id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_attachments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_labels: {
         Row: {
           created_at: string
@@ -306,25 +347,34 @@ export type Database = {
       }
       workspace_invites: {
         Row: {
+          accepted_at: string | null
           created_at: string
           created_by: string | null
+          declined_at: string | null
           id: string
+          invited_email: string | null
           revoked_at: string | null
           token: string
           workspace_id: string
         }
         Insert: {
+          accepted_at?: string | null
           created_at?: string
           created_by?: string | null
+          declined_at?: string | null
           id?: string
+          invited_email?: string | null
           revoked_at?: string | null
           token?: string
           workspace_id: string
         }
         Update: {
+          accepted_at?: string | null
           created_at?: string
           created_by?: string | null
+          declined_at?: string | null
           id?: string
+          invited_email?: string | null
           revoked_at?: string | null
           token?: string
           workspace_id?: string
@@ -403,6 +453,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      change_member_role: {
+        Args: { p_role: string; p_user_id: string; p_workspace_id: string }
+        Returns: undefined
+      }
       create_workspace_with_owner: {
         Args: { workspace_name: string; workspace_slug: string }
         Returns: {
@@ -420,6 +474,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      decline_workspace_invite: {
+        Args: { p_token: string }
+        Returns: undefined
+      }
       get_invite_workspace_name: { Args: { p_token: string }; Returns: string }
       get_workspace_members_with_email: {
         Args: { p_workspace_id: string }
@@ -429,6 +487,10 @@ export type Database = {
           role: string
           user_id: string
         }[]
+      }
+      is_workspace_admin_or_owner: {
+        Args: { p_workspace_id: string }
+        Returns: boolean
       }
       is_workspace_member: {
         Args: { p_workspace_id: string }
@@ -458,6 +520,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      transfer_workspace_ownership: {
+        Args: { p_new_owner_id: string; p_workspace_id: string }
+        Returns: undefined
       }
     }
     Enums: {

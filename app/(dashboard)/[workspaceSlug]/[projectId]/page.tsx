@@ -14,13 +14,24 @@ export default async function ProjectPage({
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, name")
+    .select("id, name, workspace_id")
     .eq("id", projectId)
     .maybeSingle()
 
   if (!project) {
     notFound()
   }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const { data: membership } = await supabase
+    .from("workspace_members")
+    .select("role")
+    .eq("workspace_id", project.workspace_id)
+    .eq("user_id", user?.id ?? "")
+    .maybeSingle()
+  const isAdminOrOwner = membership?.role === "owner" || membership?.role === "admin"
 
   // One indexed query via (project_id, status, position) — see
   // database-schema.md §2 — fetched once here and handed to the client
@@ -55,6 +66,7 @@ export default async function ProjectPage({
         projectId={project.id}
         workspaceSlug={workspaceSlug}
         initialName={project.name}
+        canManageProject={isAdminOrOwner}
       />
       <KanbanBoard projectId={project.id} initialTasks={tasksWithLabels} />
     </div>

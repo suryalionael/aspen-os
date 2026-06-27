@@ -43,7 +43,7 @@ test("a task created/moved by one user appears live for another, and so do comme
   await memberPage.getByRole("button", { name: "Create account" }).click()
   await memberPage.waitForURL("**/workspaces/new")
   await memberPage.goto(inviteUrl.href)
-  await memberPage.getByRole("button", { name: "Join workspace" }).click()
+  await memberPage.getByRole("button", { name: "Accept" }).click()
   await memberPage.waitForURL((url) => url.pathname === workspacePath)
 
   // --- Owner creates the shared project, both sessions open it ---

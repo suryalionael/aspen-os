@@ -13,6 +13,7 @@
     "test:task": "tsx scripts/test-task.ts",
     "test:position": "tsx scripts/test-position.ts",
     "test:move": "tsx scripts/test-move.ts",
+    "test:roles": "tsx scripts/test-roles.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {

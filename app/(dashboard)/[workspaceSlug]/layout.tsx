@@ -47,13 +47,18 @@ export default async function WorkspaceLayout({
     isFavorite: project.project_favorites.some((row) => row.user_id === user?.id),
   }))
 
+  const currentUserRole =
+    membership?.role === "owner" || membership?.role === "admin"
+      ? membership.role
+      : "member"
+
   return (
     <div className="flex flex-1">
       <ProjectSidebar
         workspaceId={workspace.id}
         workspaceSlug={workspace.slug}
         projects={projectsWithFavorite}
-        isOwner={membership?.role === "owner"}
+        currentUserRole={currentUserRole}
       />
       <div className="flex flex-1 flex-col">{children}</div>
     </div>

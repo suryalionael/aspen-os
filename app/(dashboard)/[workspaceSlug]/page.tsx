@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 
 import { createClient } from "@/lib/supabase/server"
+import { formatDateTime } from "@/lib/utils/format-date"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 const PRIORITY_LABELS: Record<string, string> = {
@@ -85,6 +86,8 @@ export default async function WorkspaceHomePage({
   const {
     data: { user },
   } = await supabase.auth.getUser()
+  const timezone =
+    typeof user?.user_metadata?.timezone === "string" ? user.user_metadata.timezone : null
 
   const { data: projects } = await supabase
     .from("projects")
@@ -290,7 +293,7 @@ export default async function WorkspaceHomePage({
                     <li key={entry.id}>
                       <span className="text-foreground">{actorEmail}</span> {verb}{" "}
                       <span className="text-foreground">&quot;{taskTitle}&quot;</span> ·{" "}
-                      {new Date(entry.created_at).toLocaleString()}
+                      {formatDateTime(entry.created_at, timezone)}
                     </li>
                   )
                 })}

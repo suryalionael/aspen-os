@@ -287,6 +287,17 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
+### DEC-028 — Full-text search stays client-side substring matching; no Postgres tsvector
+**Decision:** Phase J's "full text search" extends the existing client-side title search (DEC from Phase B) to also match each task's `description`, still via a plain case-insensitive substring check over the already-loaded board state — no `tsvector`/`to_tsquery` index, no server round-trip per keystroke.
+**Rationale:** CLAUDE.md's "simplicity over flexibility" and "avoid overengineering" directly apply: a Kanban board's realistic task count per project (tens to a few hundred) makes a database full-text index pure overhead with no perceptible benefit over filtering an array already sitting in memory. The "Calendar picker" requirement in the same phase is likewise already satisfied by the native `<input type="date">` already in use since Phase A2 — no custom calendar widget was built for the same reason.
+**Alternatives Considered:** Postgres `tsvector` + `to_tsquery` (rejected — disproportionate for this scale, and would require fetching `description` server-side per keystroke instead of filtering client-side data already in memory).
+**Tradeoffs:** Search only covers what's already loaded on the board (title, description) — it does not search comments, checklist items, or attachment names. Revisit if pilot feedback specifically asks for that.
+**Owner:** Product Engineer
+**Date:** 2026-06-28 (Sprint 3)
+**Future Revisit Conditions:** Add a real Postgres full-text index only if/when task volume per project grows large enough that client-side filtering becomes a real performance problem — not preemptively.
+
+---
+
 ## Open Items (Not Decisions)
 
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:

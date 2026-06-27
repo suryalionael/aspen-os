@@ -3,7 +3,7 @@
 import { Input } from "@/components/ui/input"
 import type { Label } from "@/lib/labels"
 
-export type SortMode = "manual" | "priority" | "due_date"
+export type SortMode = "manual" | "priority" | "due_date" | "newest" | "oldest" | "assignee"
 
 const SELECT_CLASS =
   "h-9 rounded-md border border-input bg-transparent px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -32,8 +32,9 @@ export function BoardToolbar({
   return (
     <div className="flex flex-1 flex-wrap items-center gap-2">
       <Input
+        id="board-search-input"
         aria-label="Search tasks"
-        placeholder="Search tasks…"
+        placeholder="Search tasks… (press / to focus)"
         value={searchQuery}
         onChange={(event) => onSearchQueryChange(event.target.value)}
         className="h-9 max-w-[220px]"
@@ -70,8 +71,11 @@ export function BoardToolbar({
         className={SELECT_CLASS}
       >
         <option value="manual">Manual order</option>
+        <option value="newest">Newest</option>
+        <option value="oldest">Oldest</option>
         <option value="priority">Sort by priority</option>
         <option value="due_date">Sort by due date</option>
+        <option value="assignee">Sort by assignee</option>
       </select>
     </div>
   )

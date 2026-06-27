@@ -39,6 +39,7 @@ export function TaskCreateInline({
     <form ref={formRef} action={formAction} className="flex flex-col gap-1">
       <input type="hidden" name="projectId" value={projectId} />
       <Input
+        id="quick-add-input"
         name="title"
         placeholder="Add a task…"
         autoComplete="off"

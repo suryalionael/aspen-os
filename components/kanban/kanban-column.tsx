@@ -18,6 +18,7 @@ export function KanbanColumn({
   status,
   projectId,
   tasks,
+  assigneeEmailById,
   onTaskMove,
   onTaskCreated,
   onTaskOpen,
@@ -30,11 +31,13 @@ export function KanbanColumn({
     title: string
     due_date: string | null
     priority: string | null
+    assignee_id: string | null
     labels: Label[]
     checklistCompleted: number
     checklistTotal: number
     commentCount: number
   }[]
+  assigneeEmailById: Map<string, string>
   onTaskMove: (taskId: string, newStatus: string) => void
   onTaskCreated: (task: { id: string; title: string; status: string }) => void
   onTaskOpen: (taskId: string) => void
@@ -76,6 +79,7 @@ export function KanbanColumn({
                 status={status}
                 dueDate={task.due_date}
                 priority={task.priority}
+                assigneeEmail={task.assignee_id ? assigneeEmailById.get(task.assignee_id) : null}
                 labels={task.labels}
                 checklistCompleted={task.checklistCompleted}
                 checklistTotal={task.checklistTotal}

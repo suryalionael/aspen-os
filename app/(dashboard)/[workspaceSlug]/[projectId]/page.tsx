@@ -39,7 +39,7 @@ export default async function ProjectPage({
   const { data: tasks } = await supabase
     .from("tasks")
     .select(
-      "id, title, status, due_date, priority, task_labels(labels(id, name, color)), checklist_items(completed), comments(id)"
+      "id, title, status, description, due_date, priority, assignee_id, created_at, task_labels(labels(id, name, color)), checklist_items(completed), comments(id)"
     )
     .eq("project_id", project.id)
     .is("archived_at", null)
@@ -50,8 +50,11 @@ export default async function ProjectPage({
     id: task.id,
     title: task.title,
     status: task.status,
+    description: task.description,
     due_date: task.due_date,
     priority: task.priority,
+    assignee_id: task.assignee_id,
+    created_at: task.created_at,
     labels: task.task_labels.flatMap((row) =>
       Array.isArray(row.labels) ? row.labels : row.labels ? [row.labels] : []
     ),

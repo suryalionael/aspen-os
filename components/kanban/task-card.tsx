@@ -31,12 +31,25 @@ function formatDueDate(dateStr: string): string {
   return new Date(year, month - 1, day).toLocaleDateString()
 }
 
+// Same local-Y/M/D construction as formatDueDate, for the same reason —
+// comparing against "today" must use the viewer's local calendar date,
+// not a UTC-shifted one.
+function isOverdue(dateStr: string, status: string): boolean {
+  if (status === "done") return false
+  const [year, month, day] = dateStr.split("-").map(Number)
+  const due = new Date(year, month - 1, day)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return due < today
+}
+
 export function TaskCard({
   id,
   title,
   status,
   dueDate,
   priority,
+  assigneeEmail,
   labels,
   checklistCompleted,
   checklistTotal,
@@ -49,6 +62,7 @@ export function TaskCard({
   status: string
   dueDate: string | null
   priority: string | null
+  assigneeEmail?: string | null
   labels: Label[]
   checklistCompleted: number
   checklistTotal: number
@@ -105,8 +119,8 @@ export function TaskCard({
           ))}
         </div>
       )}
-      {(dueDate || priority || checklistTotal > 0 || commentCount > 0) && (
-        <div className="flex items-center gap-2">
+      {(dueDate || priority || assigneeEmail || checklistTotal > 0 || commentCount > 0) && (
+        <div className="flex flex-wrap items-center gap-2">
           {checklistTotal > 0 && (
             <span className="text-xs text-muted-foreground">
               ☑ {checklistCompleted}/{checklistTotal}
@@ -125,9 +139,19 @@ export function TaskCard({
             </span>
           )}
           {dueDate && (
-            <span className="text-xs text-muted-foreground">
-              Due {formatDueDate(dueDate)}
+            <span
+              className={
+                isOverdue(dueDate, status)
+                  ? "rounded px-1.5 py-0.5 text-xs font-medium text-destructive"
+                  : "text-xs text-muted-foreground"
+              }
+            >
+              {isOverdue(dueDate, status) ? "Overdue " : "Due "}
+              {formatDueDate(dueDate)}
             </span>
+          )}
+          {assigneeEmail && (
+            <span className="text-xs text-muted-foreground">{assigneeEmail}</span>
           )}
         </div>
       )}

@@ -267,6 +267,26 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
+### DEC-026 — Three-tier roles (owner/admin/member) extend, not replace, DEC-022's invite model
+**Decision:** Sprint 3 Phase I adds an `'admin'` role between owner and member (migration 023). Permissions: owner = everything; admin = manage projects (create/rename/archive/delete) and invite/revoke members, same as before but no longer owner-exclusive; member = full task-level work (tasks, comments, checklist, labels, attachments — unchanged) but cannot manage projects, invites, member roles, or workspace deletion. Member removal, role changes, and ownership transfer stay owner-only, funneled through two new `SECURITY DEFINER` RPCs (`change_member_role`, `transfer_workspace_ownership`) rather than a generic `UPDATE` policy on `workspace_members`, so a workspace can never end up with zero or more than one owner. Invites gained `invited_email` (metadata only — see DEC-027), `accepted_at`, and `declined_at` so a single "Pending invitations" list can show real status instead of just active/revoked.
+**Rationale:** The Sprint 3 brief requires three roles with admin able to "manage projects, manage tasks, invite members" — DEC-022's owner-only model couldn't express that distinction. Funneling role/ownership changes through RPCs (rather than RLS-only) keeps the single-owner invariant enforceable in one place instead of relying on every future caller to maintain it correctly.
+**Alternatives Considered:** A generic `UPDATE` policy on `workspace_members` allowing the owner to set any role value (rejected — nothing would stop a buggy or malicious caller from creating a second `'owner'` row, or removing the only owner, since RLS `USING`/`WITH CHECK` clauses can't easily enforce "exactly one owner" as a cross-row invariant).
+**Tradeoffs:** Project management UI (the "New project" button, archived-projects list, and per-project settings dialog) is now hidden client-side for plain members per their role — this is a UX nicety on top of the real enforcement, which is RLS; a member who somehow triggers the action anyway gets a clear server error, not a silent failure.
+**Owner:** CTO, Product Engineer
+**Date:** 2026-06-28 (Sprint 3)
+**Future Revisit Conditions:** None anticipated.
+
+### DEC-027 — Invite-by-email remains metadata only; no transactional email provider added
+**Decision:** Phase I's "invite by email" stores the invitee's email on the invite row for tracking/display in the "Pending invitations" list, but does not send an actual email — the inviter still shares the link manually, exactly as DEC-022 already established for link-based invites.
+**Rationale:** Sending real email requires a transactional email provider (e.g. Resend, Supabase SMTP) with an API key/account that doesn't exist in this stack. Explicitly confirmed with the product owner rather than assumed (2026-06-28): keep this manual for now rather than take on a new external service dependency mid-sprint.
+**Alternatives Considered:** Wiring up a real provider (rejected for this sprint — requires the user to first create an account and provision credentials before any deploy could work; revisit if/when that's done).
+**Tradeoffs:** An invite "sent" to an email today is really just a labeled link; nothing stops the inviter from sharing it with someone else instead, and nothing verifies the eventual joiner's account email matches `invited_email`. Acceptable since this mirrors the pre-existing link model's trust assumptions.
+**Owner:** Founder/PM
+**Date:** 2026-06-28 (Sprint 3)
+**Future Revisit Conditions:** Add a real transactional email provider once the user provisions one; at that point, also consider whether `join_workspace_via_invite` should verify the joining account's email matches `invited_email` when one is set.
+
+---
+
 ## Open Items (Not Decisions)
 
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:

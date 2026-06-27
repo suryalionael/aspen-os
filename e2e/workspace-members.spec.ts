@@ -57,7 +57,7 @@ test("an owner can invite a second user, who joins and can later be removed", as
       exact: false,
     })
   ).toBeVisible()
-  await memberPage.getByRole("button", { name: "Join workspace" }).click()
+  await memberPage.getByRole("button", { name: "Accept" }).click()
   await memberPage.waitForURL((url) => url.pathname === workspacePath)
 
   // --- Owner sees the new member listed ---

@@ -11,30 +11,44 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import {
+  changeMemberRole,
   createInvite,
-  getActiveInvite,
+  getPendingInvites,
   getWorkspaceMembers,
   leaveWorkspace,
   removeMember,
   revokeInvite,
+  transferOwnership,
   type WorkspaceInvite,
   type WorkspaceMember,
 } from "@/lib/actions/workspaces"
 
+function inviteStatus(invite: WorkspaceInvite): string {
+  if (invite.accepted_at) return "Accepted"
+  if (invite.declined_at) return "Declined"
+  if (invite.revoked_at) return "Revoked"
+  return "Pending"
+}
+
 export function WorkspaceMembersDialog({
   workspaceId,
-  isOwner,
+  currentUserRole,
 }: {
   workspaceId: string
-  isOwner: boolean
+  currentUserRole: "owner" | "admin" | "member"
 }) {
+  const isOwner = currentUserRole === "owner"
+  const isAdminOrOwner = isOwner || currentUserRole === "admin"
+
   const [open, setOpen] = useState(false)
   const [members, setMembers] = useState<WorkspaceMember[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [invite, setInvite] = useState<WorkspaceInvite | null>(null)
+  const [invites, setInvites] = useState<WorkspaceInvite[]>([])
+  const [inviteEmail, setInviteEmail] = useState("")
   const [loading, setLoading] = useState(true)
-  const [copied, setCopied] = useState(false)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [, startTransition] = useTransition()
   const router = useRouter()
@@ -47,22 +61,22 @@ export function WorkspaceMembersDialog({
     setLoading(true)
     Promise.all([
       getWorkspaceMembers(workspaceId),
-      isOwner ? getActiveInvite(workspaceId) : null,
-    ]).then(([membersResult, inviteResult]) => {
+      isAdminOrOwner ? getPendingInvites(workspaceId) : null,
+    ]).then(([membersResult, invitesResult]) => {
       if (!active) return
       if (membersResult && "success" in membersResult) {
         setMembers(membersResult.members)
         setCurrentUserId(membersResult.currentUserId)
       }
-      if (inviteResult && "success" in inviteResult) {
-        setInvite(inviteResult.invite)
+      if (invitesResult && "success" in invitesResult) {
+        setInvites(invitesResult.invites)
       }
       setLoading(false)
     })
     return () => {
       active = false
     }
-  }, [open, workspaceId, isOwner])
+  }, [open, workspaceId, isAdminOrOwner])
 
   function handleRemove(member: WorkspaceMember) {
     setError(null)
@@ -85,34 +99,66 @@ export function WorkspaceMembersDialog({
     })
   }
 
-  function handleCreateInvite() {
+  function handleRoleChange(member: WorkspaceMember, role: "admin" | "member") {
     setError(null)
     startTransition(async () => {
-      const result = await createInvite(workspaceId)
+      const result = await changeMemberRole(workspaceId, member.user_id, role)
       if ("error" in result) {
         setError(result.error)
         return
       }
-      setInvite(result.invite)
+      setMembers((previous) =>
+        previous.map((m) => (m.user_id === member.user_id ? { ...m, role } : m))
+      )
     })
   }
 
-  function handleRevokeInvite() {
-    if (!invite) return
+  function handleTransferOwnership(member: WorkspaceMember) {
+    setError(null)
+    startTransition(async () => {
+      const result = await transferOwnership(workspaceId, member.user_id)
+      if ("error" in result) {
+        setError(result.error)
+        return
+      }
+      router.refresh()
+      setOpen(false)
+    })
+  }
+
+  function handleCreateInvite() {
+    setError(null)
+    startTransition(async () => {
+      const result = await createInvite(workspaceId, inviteEmail)
+      if ("error" in result) {
+        setError(result.error)
+        return
+      }
+      setInvites((previous) => [result.invite, ...previous])
+      setInviteEmail("")
+    })
+  }
+
+  function handleRevokeInvite(invite: WorkspaceInvite) {
     startTransition(async () => {
       const result = await revokeInvite(invite.id)
       if ("success" in result) {
-        setInvite(null)
+        setInvites((previous) =>
+          previous.map((existing) =>
+            existing.id === invite.id
+              ? { ...existing, revoked_at: new Date().toISOString() }
+              : existing
+          )
+        )
       }
     })
   }
 
-  function handleCopyLink() {
-    if (!invite) return
+  function handleCopyLink(invite: WorkspaceInvite) {
     const url = `${window.location.origin}/invite/${invite.token}`
     navigator.clipboard.writeText(url).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setCopiedId(invite.id)
+      setTimeout(() => setCopiedId(null), 2000)
     })
   }
 
@@ -123,7 +169,7 @@ export function WorkspaceMembersDialog({
           Members
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Workspace members</DialogTitle>
         </DialogHeader>
@@ -136,6 +182,7 @@ export function WorkspaceMembersDialog({
               {members.map((member) => (
                 <li
                   key={member.user_id}
+                  data-testid="member-row"
                   className="flex items-center justify-between gap-2 rounded-md border border-border p-2 text-sm"
                 >
                   <div>
@@ -144,21 +191,45 @@ export function WorkspaceMembersDialog({
                       {member.role}
                     </span>
                   </div>
-                  {member.user_id === currentUserId ? (
-                    <Button size="sm" variant="outline" onClick={handleLeave}>
-                      Leave
-                    </Button>
-                  ) : (
-                    isOwner && (
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => handleRemove(member)}
-                      >
-                        Remove
+                  <div className="flex items-center gap-1.5">
+                    {member.user_id === currentUserId ? (
+                      <Button size="sm" variant="outline" onClick={handleLeave}>
+                        Leave
                       </Button>
-                    )
-                  )}
+                    ) : (
+                      isOwner &&
+                      member.role !== "owner" && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              handleRoleChange(
+                                member,
+                                member.role === "admin" ? "member" : "admin"
+                              )
+                            }
+                          >
+                            {member.role === "admin" ? "Make member" : "Make admin"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleTransferOwnership(member)}
+                          >
+                            Make owner
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleRemove(member)}
+                          >
+                            Remove
+                          </Button>
+                        </>
+                      )
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -169,29 +240,69 @@ export function WorkspaceMembersDialog({
               </p>
             )}
 
-            {isOwner && (
+            {isAdminOrOwner && (
               <div className="border-t border-border pt-3">
-                <h3 className="mb-2 text-sm font-semibold">Invite link</h3>
-                {invite ? (
-                  <div className="flex flex-col gap-2">
-                    <p className="break-all rounded-md border border-border bg-secondary/30 p-2 text-xs">
-                      {typeof window !== "undefined"
-                        ? `${window.location.origin}/invite/${invite.token}`
-                        : `/invite/${invite.token}`}
-                    </p>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={handleCopyLink}>
-                        {copied ? "Copied!" : "Copy link"}
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={handleRevokeInvite}>
-                        Revoke
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
+                <h3 className="mb-2 text-sm font-semibold">Invite someone</h3>
+                <div className="flex gap-2">
+                  <Input
+                    type="email"
+                    placeholder="email@example.com (optional)"
+                    aria-label="Invite email"
+                    value={inviteEmail}
+                    onChange={(event) => setInviteEmail(event.target.value)}
+                  />
                   <Button size="sm" variant="outline" onClick={handleCreateInvite}>
                     Create invite link
                   </Button>
+                </div>
+
+                {invites.length > 0 && (
+                  <div className="mt-3 flex flex-col gap-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground">
+                      Pending invitations
+                    </h4>
+                    <ul className="flex flex-col gap-2">
+                      {invites.map((invite) => (
+                        <li
+                          key={invite.id}
+                          data-testid="invite-row"
+                          className="flex flex-col gap-1 rounded-md border border-border p-2 text-xs"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span>{invite.invited_email ?? "(no email)"}</span>
+                            <span className="text-muted-foreground">
+                              {inviteStatus(invite)}
+                            </span>
+                          </div>
+                          {!invite.revoked_at && !invite.declined_at && (
+                            <>
+                              <p className="break-all rounded-md border border-border bg-secondary/30 p-1.5">
+                                {typeof window !== "undefined"
+                                  ? `${window.location.origin}/invite/${invite.token}`
+                                  : `/invite/${invite.token}`}
+                              </p>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleCopyLink(invite)}
+                                >
+                                  {copiedId === invite.id ? "Copied!" : "Copy link"}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleRevokeInvite(invite)}
+                                >
+                                  Revoke
+                                </Button>
+                              </div>
+                            </>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
             )}

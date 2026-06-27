@@ -31,14 +31,15 @@ export function ProjectSidebar({
   workspaceId,
   workspaceSlug,
   projects,
-  isOwner,
+  currentUserRole,
 }: {
   workspaceId: string
   workspaceSlug: string
   projects: Project[]
-  isOwner: boolean
+  currentUserRole: "owner" | "admin" | "member"
 }) {
   const favorites = projects.filter((project) => project.isFavorite)
+  const isAdminOrOwner = currentUserRole === "owner" || currentUserRole === "admin"
 
   return (
     <aside className="flex w-56 flex-shrink-0 flex-col gap-3 border-r border-border p-4">
@@ -46,7 +47,7 @@ export function ProjectSidebar({
         <h2 className="text-sm font-semibold text-muted-foreground">
           Workspace
         </h2>
-        <WorkspaceMembersDialog workspaceId={workspaceId} isOwner={isOwner} />
+        <WorkspaceMembersDialog workspaceId={workspaceId} currentUserRole={currentUserRole} />
       </div>
 
       {favorites.length > 0 && (
@@ -70,10 +71,14 @@ export function ProjectSidebar({
         <h2 className="text-sm font-semibold text-muted-foreground">
           Projects
         </h2>
-        <ProjectCreateDialog
-          workspaceId={workspaceId}
-          workspaceSlug={workspaceSlug}
-        />
+        {/* Project lifecycle management (create/rename/archive/delete) is
+            admin+owner only — members "work only" (migration 023). */}
+        {isAdminOrOwner && (
+          <ProjectCreateDialog
+            workspaceId={workspaceId}
+            workspaceSlug={workspaceSlug}
+          />
+        )}
       </div>
       {projects.length === 0 ? (
         <p className="text-sm text-muted-foreground">No projects yet</p>
@@ -89,9 +94,11 @@ export function ProjectSidebar({
         </nav>
       )}
 
-      <div className="border-t border-border pt-3">
-        <ArchivedProjectsDialog workspaceId={workspaceId} />
-      </div>
+      {isAdminOrOwner && (
+        <div className="border-t border-border pt-3">
+          <ArchivedProjectsDialog workspaceId={workspaceId} />
+        </div>
+      )}
     </aside>
   )
 }

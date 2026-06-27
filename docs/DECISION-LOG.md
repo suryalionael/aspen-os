@@ -349,7 +349,23 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
-## Open Items (Not Decisions)
+### DEC-034 — A second, workspace-scoped audit_log table sits alongside task_activity (not instead of it)
+**Decision:** Phase N's "complete audit log" is a new `audit_log` table (migration 028) — workspace-scoped, target-agnostic (a denormalized `target_label` instead of a foreign key to the thing it describes). Every mutation site that matters for the audit log (task CRUD/move/comment/checklist/attachment, invitations, role changes, project rename/archive/delete, workspace rename/archive) writes to audit_log *in addition to* its existing task_activity/logActivity call where one exists — task_activity (DEC-021) still backs the per-task panel directly.
+**Rationale:** task_activity structurally can't be the complete audit log for two reasons: its FK cascades away with the task it describes (by design, per DEC-021 — a per-task history, not a tenant-wide record), so a "task deleted" entry would itself vanish the instant it's written; and it only ever covered task-level events, never project renames, workspace renames, invitations, or role changes. A denormalized `target_label` (not a second set of foreign keys to projects/tasks/users) is what lets an entry survive its subject being deleted or renamed later.
+**Alternatives Considered:** Removing task_activity's cascade and repurposing it as the workspace-wide log (rejected — would break the per-task panel's task-scoped queries and contradicts DEC-021's stated reasoning); a generic polymorphic `target_type`/`target_id` pair instead of a label (rejected — adds query complexity for filtering, the label is self-sufficient for an audit log's actual purpose of being read by a human).
+**Tradeoffs:** Two real, named exceptions are documented at their call sites rather than silently handled: `declineInvite` writes no audit entry (the decliner never becomes a member, and audit_log's INSERT policy requires membership — same posture as task_activity); `deleteWorkspace` writes no "workspace.deleted" entry (audit_log.workspace_id cascades with the workspace, so the row would be destroyed in the same transaction it's written in — there's no way to audit the deletion of the thing the log itself lives in).
+**Owner:** Product Engineer
+**Date:** 2026-06-28 (Sprint 3)
+**Future Revisit Conditions:** None anticipated.
+
+### DEC-035 — Sidebar header overflow recurrence: a structural lesson, not a one-off fix
+**Finding:** Adding a third button ("Audit log") to the sidebar's top header row reproduced the exact "Sidebar layout overflow → click interception" bug from earlier in this engagement — confirmed directly via `boundingBox()`: the "Members" button's right edge landed at ~290px against the sidebar's fixed 224px (`w-56`) width, and Playwright's click failed with a real element (the dashboard's empty-state placeholder) intercepting the pointer event. Fixed by splitting the header into two rows (heading+bell on one, Audit log+Members on the next), the same fix shape as the original incident.
+**Rationale:** This is the *second* time a new sidebar button has caused this exact failure mode. Recording it as its own entry (not folding it into DEC-034) to make the pattern explicit for next time: **the sidebar's top header row has no slack left — any new button added there needs its own row, not a spot in the existing one.** Treat this as a standing constraint when adding sidebar actions, not something to re-discover via a failing test each time.
+**Owner:** Product Engineer
+**Date:** 2026-06-28 (Sprint 3)
+**Future Revisit Conditions:** Revisit if the sidebar is ever redesigned with more horizontal room (e.g. a wider layout or a collapsible action menu) — until then, new sidebar-header actions get their own row.
+
+---
 
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:
 

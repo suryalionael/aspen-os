@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 
 import { slugify, withRetrySuffix } from "@/lib/utils/slug"
 import { createClient } from "@/lib/supabase/server"
+import { logAuditEvent } from "@/lib/actions/audit"
 
 export type CreateWorkspaceState = { error: string } | undefined
 
@@ -82,6 +83,16 @@ export async function removeMember(
   userId: string
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  const { data: members } = await supabase.rpc("get_workspace_members_with_email", {
+    p_workspace_id: workspaceId,
+  })
+  const removedEmail = (members ?? []).find(
+    (member: { user_id: string; email: string }) => member.user_id === userId
+  )?.email
 
   const { error } = await supabase
     .from("workspace_members")
@@ -91,6 +102,15 @@ export async function removeMember(
 
   if (error) {
     return { error: error.message }
+  }
+
+  if (user) {
+    await logAuditEvent(supabase, {
+      workspaceId,
+      actorId: user.id,
+      action: "member.removed",
+      targetLabel: removedEmail ?? null,
+    })
   }
 
   revalidatePath("/", "layout")
@@ -108,6 +128,16 @@ export async function leaveWorkspace(
   if (!user) {
     return { error: "You must be signed in to leave a workspace." }
   }
+
+  // Logged before the delete, not after — once this user's own membership
+  // row is gone, audit_log's INSERT policy (is_workspace_member) would
+  // reject an entry from them for this workspace.
+  await logAuditEvent(supabase, {
+    workspaceId,
+    actorId: user.id,
+    action: "member.left",
+    targetLabel: user.email ?? null,
+  })
 
   const { error } = await supabase
     .from("workspace_members")
@@ -185,6 +215,13 @@ export async function createInvite(
     }
   }
 
+  await logAuditEvent(supabase, {
+    workspaceId,
+    actorId: user.id,
+    action: "invitation.created",
+    targetLabel: data.invited_email,
+  })
+
   revalidatePath("/", "layout")
   return { success: true, invite: data }
 }
@@ -193,14 +230,28 @@ export async function revokeInvite(
   inviteId: string
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("workspace_invites")
     .update({ revoked_at: new Date().toISOString() })
     .eq("id", inviteId)
+    .select("workspace_id, invited_email")
+    .single()
 
   if (error) {
     return { error: error.message }
+  }
+
+  if (user && data) {
+    await logAuditEvent(supabase, {
+      workspaceId: data.workspace_id,
+      actorId: user.id,
+      action: "invitation.revoked",
+      targetLabel: data.invited_email,
+    })
   }
 
   revalidatePath("/", "layout")
@@ -212,6 +263,10 @@ export async function declineInvite(
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
 
+  // No audit_log entry here, deliberately: the decliner isn't (and never
+  // becomes) a workspace member, and audit_log's INSERT policy requires
+  // is_workspace_member — same membership-gated posture as task_activity.
+  // The invite's own declined_at column already records this.
   const { error } = await supabase.rpc("decline_workspace_invite", { p_token: token })
 
   if (error) {
@@ -227,6 +282,16 @@ export async function changeMemberRole(
   role: "admin" | "member"
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  const { data: members } = await supabase.rpc("get_workspace_members_with_email", {
+    p_workspace_id: workspaceId,
+  })
+  const targetEmail = (members ?? []).find(
+    (member: { user_id: string; email: string }) => member.user_id === userId
+  )?.email
 
   const { error } = await supabase.rpc("change_member_role", {
     p_workspace_id: workspaceId,
@@ -238,6 +303,16 @@ export async function changeMemberRole(
     return { error: error.message }
   }
 
+  if (user) {
+    await logAuditEvent(supabase, {
+      workspaceId,
+      actorId: user.id,
+      action: "member.role_changed",
+      targetLabel: targetEmail ?? null,
+      metadata: { role },
+    })
+  }
+
   revalidatePath("/", "layout")
   return { success: true }
 }
@@ -247,6 +322,16 @@ export async function transferOwnership(
   newOwnerId: string
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  const { data: members } = await supabase.rpc("get_workspace_members_with_email", {
+    p_workspace_id: workspaceId,
+  })
+  const newOwnerEmail = (members ?? []).find(
+    (member: { user_id: string; email: string }) => member.user_id === newOwnerId
+  )?.email
 
   const { error } = await supabase.rpc("transfer_workspace_ownership", {
     p_workspace_id: workspaceId,
@@ -255,6 +340,16 @@ export async function transferOwnership(
 
   if (error) {
     return { error: error.message }
+  }
+
+  if (user) {
+    await logAuditEvent(supabase, {
+      workspaceId,
+      actorId: user.id,
+      action: "member.role_changed",
+      targetLabel: newOwnerEmail ?? null,
+      metadata: { role: "owner" },
+    })
   }
 
   revalidatePath("/", "layout")
@@ -281,6 +376,9 @@ export async function joinWorkspaceViaInvite(
   token: string
 ): Promise<{ error: string } | { success: true; workspaceSlug: string }> {
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   const { data, error } = await supabase.rpc("join_workspace_via_invite", {
     p_token: token,
@@ -288,6 +386,18 @@ export async function joinWorkspaceViaInvite(
 
   if (error || !data) {
     return { error: error?.message ?? "Could not join workspace." }
+  }
+
+  // Safe to log now, not before: the RPC's own INSERT into
+  // workspace_members already committed, so this caller now satisfies
+  // audit_log's is_workspace_member INSERT check.
+  if (user) {
+    await logAuditEvent(supabase, {
+      workspaceId: data.workspace_id,
+      actorId: user.id,
+      action: "invitation.accepted",
+      targetLabel: user.email ?? null,
+    })
   }
 
   const { data: workspace } = await supabase

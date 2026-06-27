@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { logActivity } from "@/lib/actions/tasks"
 import { createNotification, getTaskNotificationContext } from "@/lib/actions/notifications"
+import { logAuditEvent } from "@/lib/actions/audit"
 import { computePosition } from "@/lib/utils/position"
 
 export type ChecklistItem = {
@@ -73,6 +74,16 @@ export async function addChecklistItem(
   await logActivity(supabase, taskId, user.id, "checklist_item_added", {
     content: trimmed,
   })
+  const addContext = await getTaskNotificationContext(supabase, taskId)
+  if (addContext) {
+    await logAuditEvent(supabase, {
+      workspaceId: addContext.workspaceId,
+      actorId: user.id,
+      action: "task.checklist_updated",
+      targetLabel: addContext.title,
+      metadata: { change: "added", content: trimmed },
+    })
+  }
   revalidatePath("/", "layout")
   return { success: true, item: data }
 }
@@ -110,6 +121,17 @@ export async function toggleChecklistItem(
     { content: data.content }
   )
 
+  const toggleContext = await getTaskNotificationContext(supabase, taskId)
+  if (toggleContext) {
+    await logAuditEvent(supabase, {
+      workspaceId: toggleContext.workspaceId,
+      actorId: user.id,
+      action: "task.checklist_updated",
+      targetLabel: toggleContext.title,
+      metadata: { change: completed ? "completed" : "reopened", content: data.content },
+    })
+  }
+
   if (completed) {
     // Only notify when THIS toggle is the one that completed the whole
     // checklist — checking after the update above means the just-toggled
@@ -121,7 +143,7 @@ export async function toggleChecklistItem(
     const allCompleted = (items ?? []).length > 0 && (items ?? []).every((item) => item.completed)
 
     if (allCompleted) {
-      const context = await getTaskNotificationContext(supabase, taskId)
+      const context = toggleContext
       if (context) {
         const recipients = new Set(
           [context.assigneeId, context.createdBy].filter(
@@ -176,6 +198,16 @@ export async function deleteChecklistItem(
     await logActivity(supabase, taskId, user.id, "checklist_item_removed", {
       content: item.content,
     })
+    const context = await getTaskNotificationContext(supabase, taskId)
+    if (context) {
+      await logAuditEvent(supabase, {
+        workspaceId: context.workspaceId,
+        actorId: user.id,
+        action: "task.checklist_updated",
+        targetLabel: context.title,
+        metadata: { change: "removed", content: item.content },
+      })
+    }
   }
   revalidatePath("/", "layout")
   return { success: true }

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 
 import { createClient } from "@/lib/supabase/server"
+import { logAuditEvent } from "@/lib/actions/audit"
 
 export type WorkspaceSettings = {
   id: string
@@ -61,6 +62,15 @@ export async function updateWorkspaceSettings(
   }
 
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  const { data: previous } = await supabase
+    .from("workspaces")
+    .select("name")
+    .eq("id", workspaceId)
+    .maybeSingle()
 
   const { error } = await supabase
     .from("workspaces")
@@ -73,6 +83,15 @@ export async function updateWorkspaceSettings(
 
   if (error) {
     return { error: error.message }
+  }
+
+  if (user) {
+    await logAuditEvent(supabase, {
+      workspaceId,
+      actorId: user.id,
+      action: previous && previous.name !== name ? "workspace.renamed" : "workspace.updated",
+      targetLabel: name,
+    })
   }
 
   revalidatePath("/", "layout")
@@ -169,11 +188,18 @@ export async function archiveWorkspace(
   workspaceId: string
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   const { error } = await supabase.rpc("archive_workspace", { p_workspace_id: workspaceId })
 
   if (error) {
     return { error: error.message }
+  }
+
+  if (user) {
+    await logAuditEvent(supabase, { workspaceId, actorId: user.id, action: "workspace.archived" })
   }
 
   revalidatePath("/", "layout")
@@ -184,6 +210,9 @@ export async function unarchiveWorkspace(
   workspaceId: string
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   const { error } = await supabase.rpc("unarchive_workspace", { p_workspace_id: workspaceId })
 
@@ -191,10 +220,22 @@ export async function unarchiveWorkspace(
     return { error: error.message }
   }
 
+  if (user) {
+    await logAuditEvent(supabase, {
+      workspaceId,
+      actorId: user.id,
+      action: "workspace.unarchived",
+    })
+  }
+
   revalidatePath("/", "layout")
   return { success: true }
 }
 
+// No audit_log entry here, deliberately (DEC-032): audit_log.workspace_id
+// cascades with the workspace, so a "workspace.deleted" row would be
+// destroyed in the same transaction it's written in — there's no way to
+// audit the deletion of the thing the audit trail itself lives in.
 export async function deleteWorkspace(workspaceId: string): Promise<{ error: string } | never> {
   const supabase = await createClient()
 

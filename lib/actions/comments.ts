@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { logActivity } from "@/lib/actions/tasks"
 import { createNotification, getTaskNotificationContext } from "@/lib/actions/notifications"
+import { logAuditEvent } from "@/lib/actions/audit"
 
 export type Comment = {
   id: string
@@ -70,6 +71,13 @@ export async function addComment(
 
   const context = await getTaskNotificationContext(supabase, taskId)
   if (context) {
+    await logAuditEvent(supabase, {
+      workspaceId: context.workspaceId,
+      actorId: user.id,
+      action: "task.commented",
+      targetLabel: context.title,
+    })
+
     // Notify whoever isn't the commenter: the assignee and/or creator.
     // createNotification already no-ops when userId === actorId, so no
     // extra de-duping is needed beyond not notifying twice for the same

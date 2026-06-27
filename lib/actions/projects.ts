@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 
 import { createClient } from "@/lib/supabase/server"
+import { logAuditEvent } from "@/lib/actions/audit"
 
 export type CreateProjectState = { error: string } | undefined
 
@@ -54,16 +55,28 @@ export async function renameProject(
   }
 
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   const { data, error } = await supabase
     .from("projects")
     .update({ name: trimmed })
     .eq("id", projectId)
-    .select("name")
+    .select("name, workspace_id")
     .single()
 
   if (error || !data) {
     return { error: error?.message ?? "Could not rename project." }
+  }
+
+  if (user) {
+    await logAuditEvent(supabase, {
+      workspaceId: data.workspace_id,
+      actorId: user.id,
+      action: "project.renamed",
+      targetLabel: data.name,
+    })
   }
 
   revalidatePath("/", "layout")
@@ -74,14 +87,28 @@ export async function archiveProject(
   projectId: string
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("projects")
     .update({ archived_at: new Date().toISOString() })
     .eq("id", projectId)
+    .select("name, workspace_id")
+    .single()
 
-  if (error) {
-    return { error: error.message }
+  if (error || !data) {
+    return { error: error?.message ?? "Could not archive project." }
+  }
+
+  if (user) {
+    await logAuditEvent(supabase, {
+      workspaceId: data.workspace_id,
+      actorId: user.id,
+      action: "project.archived",
+      targetLabel: data.name,
+    })
   }
 
   revalidatePath("/", "layout")
@@ -92,14 +119,28 @@ export async function unarchiveProject(
   projectId: string
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("projects")
     .update({ archived_at: null })
     .eq("id", projectId)
+    .select("name, workspace_id")
+    .single()
 
-  if (error) {
-    return { error: error.message }
+  if (error || !data) {
+    return { error: error?.message ?? "Could not restore project." }
+  }
+
+  if (user) {
+    await logAuditEvent(supabase, {
+      workspaceId: data.workspace_id,
+      actorId: user.id,
+      action: "project.unarchived",
+      targetLabel: data.name,
+    })
   }
 
   revalidatePath("/", "layout")
@@ -132,11 +173,31 @@ export async function deleteProject(
   workspaceSlug: string
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  // Fetched before deleting — same reasoning as deleteTask: once the row
+  // is gone there's nothing left to read its name/workspace_id from.
+  const { data: project } = await supabase
+    .from("projects")
+    .select("name, workspace_id")
+    .eq("id", projectId)
+    .maybeSingle()
 
   const { error } = await supabase.from("projects").delete().eq("id", projectId)
 
   if (error) {
     return { error: error.message }
+  }
+
+  if (user && project) {
+    await logAuditEvent(supabase, {
+      workspaceId: project.workspace_id,
+      actorId: user.id,
+      action: "project.deleted",
+      targetLabel: project.name,
+    })
   }
 
   redirect(`/${workspaceSlug}`)

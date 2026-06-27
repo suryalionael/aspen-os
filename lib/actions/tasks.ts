@@ -3,12 +3,27 @@
 import { revalidatePath } from "next/cache"
 
 import { createClient } from "@/lib/supabase/server"
-import { createNotification } from "@/lib/actions/notifications"
+import { createNotification, getTaskNotificationContext } from "@/lib/actions/notifications"
+import { logAuditEvent } from "@/lib/actions/audit"
 import {
   computePosition,
   needsRebalance,
   rebalancePositions,
 } from "@/lib/utils/position"
+
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
+
+async function getWorkspaceIdForProject(
+  supabase: SupabaseServerClient,
+  projectId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("projects")
+    .select("workspace_id")
+    .eq("id", projectId)
+    .maybeSingle()
+  return data?.workspace_id ?? null
+}
 
 export type CreateTaskState =
   | { error: string }
@@ -70,6 +85,16 @@ export async function createTask(
   }
 
   await logActivity(supabase, newTask.id, user.id, "created")
+
+  const workspaceId = await getWorkspaceIdForProject(supabase, projectId)
+  if (workspaceId) {
+    await logAuditEvent(supabase, {
+      workspaceId,
+      actorId: user.id,
+      action: "task.created",
+      targetLabel: newTask.title,
+    })
+  }
 
   // KanbanBoard owns its own client-side task state for drag-and-drop
   // (Phase 6) rather than re-rendering directly from server props, so this
@@ -193,6 +218,22 @@ export async function moveTask(input: MoveTaskInput): Promise<MoveTaskResult> {
     await logActivity(supabase, input.taskId, user.id, "moved", {
       to: input.status,
     })
+
+    const workspaceId = await getWorkspaceIdForProject(supabase, input.projectId)
+    if (workspaceId) {
+      const { data: movedTask } = await supabase
+        .from("tasks")
+        .select("title")
+        .eq("id", input.taskId)
+        .maybeSingle()
+      await logAuditEvent(supabase, {
+        workspaceId,
+        actorId: user.id,
+        action: "task.moved",
+        targetLabel: movedTask?.title ?? null,
+        metadata: { to: input.status },
+      })
+    }
   }
 
   // No revalidatePath here: moveTask is called directly from client event
@@ -293,6 +334,19 @@ export async function editTask(
       await logActivity(supabase, taskId, user.id, "edited", change)
     }
 
+    if (changes.length > 0) {
+      const workspaceId = await getWorkspaceIdForProject(supabase, previousTask.project_id)
+      if (workspaceId) {
+        await logAuditEvent(supabase, {
+          workspaceId,
+          actorId: user.id,
+          action: "task.edited",
+          targetLabel: updatedTask.title,
+          metadata: { fields: changes.map((change) => change.field) },
+        })
+      }
+    }
+
     // Notify the new assignee — not on every edit, only when assignee_id
     // actually changed to a new, non-null value (already guaranteed by
     // the `changes` filter above finding it in the diff).
@@ -333,6 +387,8 @@ export async function archiveTask(taskId: string): Promise<ArchiveTaskResult> {
     return { error: "You must be signed in to archive a task." }
   }
 
+  const context = await getTaskNotificationContext(supabase, taskId)
+
   const { error } = await supabase
     .from("tasks")
     .update({ archived_at: new Date().toISOString() })
@@ -343,6 +399,14 @@ export async function archiveTask(taskId: string): Promise<ArchiveTaskResult> {
   }
 
   await logActivity(supabase, taskId, user.id, "archived")
+  if (context) {
+    await logAuditEvent(supabase, {
+      workspaceId: context.workspaceId,
+      actorId: user.id,
+      action: "task.archived",
+      targetLabel: context.title,
+    })
+  }
   revalidatePath("/", "layout")
   return { success: true }
 }
@@ -357,6 +421,8 @@ export async function unarchiveTask(taskId: string): Promise<ArchiveTaskResult> 
     return { error: "You must be signed in to unarchive a task." }
   }
 
+  const context = await getTaskNotificationContext(supabase, taskId)
+
   const { error } = await supabase
     .from("tasks")
     .update({ archived_at: null })
@@ -367,6 +433,14 @@ export async function unarchiveTask(taskId: string): Promise<ArchiveTaskResult> 
   }
 
   await logActivity(supabase, taskId, user.id, "unarchived")
+  if (context) {
+    await logAuditEvent(supabase, {
+      workspaceId: context.workspaceId,
+      actorId: user.id,
+      action: "task.unarchived",
+      targetLabel: context.title,
+    })
+  }
   revalidatePath("/", "layout")
   return { success: true }
 }
@@ -383,13 +457,26 @@ export async function deleteTask(taskId: string): Promise<DeleteTaskResult> {
     return { error: "You must be signed in to delete a task." }
   }
 
-  // No activity log entry: the row (and its task_activity history) is
-  // cascade-deleted together, so there is nothing left to attach a "deleted"
-  // entry to — this is a hard, permanent delete, distinct from archive.
+  // No task_activity entry: the row (and its task_activity history) is
+  // cascade-deleted together, so there is nothing left to attach a
+  // "deleted" entry to — this is exactly why Phase N's audit_log
+  // (migration 028) exists: it's workspace-scoped, not tied to the task
+  // by foreign key, so it survives the row it describes being gone.
+  const context = await getTaskNotificationContext(supabase, taskId)
+
   const { error } = await supabase.from("tasks").delete().eq("id", taskId)
 
   if (error) {
     return { error: error.message }
+  }
+
+  if (context) {
+    await logAuditEvent(supabase, {
+      workspaceId: context.workspaceId,
+      actorId: user.id,
+      action: "task.deleted",
+      targetLabel: context.title,
+    })
   }
 
   revalidatePath("/", "layout")

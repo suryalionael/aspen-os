@@ -116,6 +116,64 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          project_id: string | null
+          read_at: string | null
+          task_id: string | null
+          type: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          project_id?: string | null
+          read_at?: string | null
+          task_id?: string | null
+          type: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          project_id?: string | null
+          read_at?: string | null
+          task_id?: string | null
+          type?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_favorites: {
         Row: {
           created_at: string
@@ -502,6 +560,10 @@ export type Database = {
       }
       is_workspace_member_for_task: {
         Args: { p_task_id: string }
+        Returns: boolean
+      }
+      is_workspace_member_user: {
+        Args: { p_user_id: string; p_workspace_id: string }
         Returns: boolean
       }
       is_workspace_owner: { Args: { p_workspace_id: string }; Returns: boolean }

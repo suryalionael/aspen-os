@@ -126,6 +126,7 @@ export function TaskDetailDialog({
   const [activity, setActivity] = useState<TaskActivityEntry[]>([])
   const [activityLoading, setActivityLoading] = useState(false)
   const [members, setMembers] = useState<ProjectMember[]>([])
+  const [membersLoaded, setMembersLoaded] = useState(false)
   const [timezone, setTimezone] = useState<string | null>(null)
 
   useEffect(() => {
@@ -172,9 +173,11 @@ export function TaskDetailDialog({
   useEffect(() => {
     if (!projectIdForMembers) return
     let active = true
+    setMembersLoaded(false)
     getProjectMembers(projectIdForMembers).then((result) => {
       if (!active) return
       setMembers("success" in result ? result.members : [])
+      setMembersLoaded(true)
     })
     return () => {
       active = false
@@ -337,8 +340,19 @@ export function TaskDetailDialog({
             <select
               id="task-assignee"
               name="assigneeId"
-              key={`assignee-${taskDetail.id}`}
+              // Remounts once membersLoaded flips true so defaultValue is
+              // (re-)applied against the complete <option> list — without
+              // this, a save that landed before getProjectMembers()
+              // resolved would permanently lose the assignee: the browser
+              // can't select an option that doesn't exist yet at mount
+              // time, and React never re-applies defaultValue to an
+              // already-mounted uncontrolled <select> when children
+              // change later (confirmed directly: editing an already-
+              // assigned task's due date alone silently nulled out
+              // assignee_id).
+              key={`assignee-${taskDetail.id}-${membersLoaded}`}
               defaultValue={taskDetail.assignee_id ?? ""}
+              disabled={!membersLoaded}
               className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <option value="">Unassigned</option>

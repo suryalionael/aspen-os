@@ -12,6 +12,7 @@ import {
 import { arrayMove } from "@dnd-kit/sortable"
 
 import { moveTask, type ArchivedTask, type EditedTask } from "@/lib/actions/tasks"
+import { getProjectMembers } from "@/lib/actions/projects"
 import type { Label } from "@/lib/labels"
 import { createClient } from "@/lib/supabase/client"
 import { useToasts } from "@/lib/hooks/use-toasts"
@@ -41,8 +42,11 @@ type Task = {
   id: string
   title: string
   status: string
+  description: string | null
   due_date: string | null
   priority: string | null
+  assignee_id: string | null
+  created_at: string
   labels: Label[]
   checklistCompleted: number
   checklistTotal: number
@@ -86,8 +90,53 @@ export function KanbanBoard({
   const [priorityFilter, setPriorityFilter] = useState("")
   const [labelFilter, setLabelFilter] = useState("")
   const [sortMode, setSortMode] = useState<SortMode>("manual")
+  const [assigneeEmailById, setAssigneeEmailById] = useState<Map<string, string>>(new Map())
   const { toasts, pushToast } = useToasts()
   const recentlyTouched = useRef<Map<string, number>>(new Map())
+
+  // Needed for the assignee sort/badge on TaskCard — fetched once per
+  // project, same RPC the assignee picker in TaskDetailDialog already uses.
+  useEffect(() => {
+    let active = true
+    getProjectMembers(projectId).then((result) => {
+      if (!active) return
+      if ("success" in result) {
+        setAssigneeEmailById(new Map(result.members.map((member) => [member.user_id, member.email])))
+      }
+    })
+    return () => {
+      active = false
+    }
+  }, [projectId])
+
+  // Phase J keyboard shortcuts: "c" focuses the quick-add input, "/"
+  // focuses the search box. Ignored while typing in any field (so typing
+  // a literal "c" or "/" into a task title never gets hijacked) and while
+  // the task detail dialog is open (its own fields take precedence).
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (openTaskId) return
+      const target = event.target as HTMLElement | null
+      const isEditable =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      if (isEditable) return
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+
+      if (event.key === "c") {
+        event.preventDefault()
+        document.getElementById("quick-add-input")?.focus()
+      } else if (event.key === "/") {
+        event.preventDefault()
+        document.getElementById("board-search-input")?.focus()
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [openTaskId])
 
   function markTouched(taskId: string) {
     recentlyTouched.current.set(taskId, Date.now())
@@ -150,8 +199,11 @@ export function KanbanBoard({
                 id: string
                 title: string
                 status: string
+                description: string | null
                 due_date: string | null
                 priority: string | null
+                assignee_id: string | null
+                created_at: string
                 archived_at: string | null
               }
               if (row.archived_at) return
@@ -178,8 +230,11 @@ export function KanbanBoard({
                   id: row.id,
                   title: row.title,
                   status: row.status,
+                  description: row.description,
                   due_date: row.due_date,
                   priority: row.priority,
+                  assignee_id: row.assignee_id,
+                  created_at: row.created_at,
                   labels: [],
                   checklistCompleted: 0,
                   checklistTotal: 0,
@@ -201,8 +256,11 @@ export function KanbanBoard({
               id: string
               title: string
               status: string
+              description: string | null
               due_date: string | null
               priority: string | null
+              assignee_id: string | null
+              created_at: string
               archived_at: string | null
             }
             const touched = wasRecentlyTouched(row.id)
@@ -232,15 +290,20 @@ export function KanbanBoard({
                     ...existing,
                     title: row.title,
                     status: row.status,
+                    description: row.description,
                     due_date: row.due_date,
                     priority: row.priority,
+                    assignee_id: row.assignee_id,
                   }
                 : {
                     id: row.id,
                     title: row.title,
                     status: row.status,
+                    description: row.description,
                     due_date: row.due_date,
                     priority: row.priority,
+                    assignee_id: row.assignee_id,
+                    created_at: row.created_at,
                     labels: [],
                     checklistCompleted: 0,
                     checklistTotal: 0,
@@ -291,7 +354,13 @@ export function KanbanBoard({
 
     for (const status of STATUSES) {
       let list = tasksByStatus[status].filter((task) => {
-        if (query && !task.title.toLowerCase().includes(query)) return false
+        if (
+          query &&
+          !task.title.toLowerCase().includes(query) &&
+          !(task.description ?? "").toLowerCase().includes(query)
+        ) {
+          return false
+        }
         if (priorityFilter && task.priority !== priorityFilter) return false
         if (labelFilter && !task.labels.some((label) => label.id === labelFilter)) {
           return false
@@ -312,13 +381,26 @@ export function KanbanBoard({
           if (!b.due_date) return -1
           return a.due_date.localeCompare(b.due_date)
         })
+      } else if (sortMode === "newest") {
+        list = [...list].sort((a, b) => b.created_at.localeCompare(a.created_at))
+      } else if (sortMode === "oldest") {
+        list = [...list].sort((a, b) => a.created_at.localeCompare(b.created_at))
+      } else if (sortMode === "assignee") {
+        list = [...list].sort((a, b) => {
+          const aEmail = a.assignee_id ? assigneeEmailById.get(a.assignee_id) ?? "" : ""
+          const bEmail = b.assignee_id ? assigneeEmailById.get(b.assignee_id) ?? "" : ""
+          if (!aEmail && !bEmail) return 0
+          if (!aEmail) return 1
+          if (!bEmail) return -1
+          return aEmail.localeCompare(bEmail)
+        })
       }
 
       next[status] = list
     }
 
     return next
-  }, [tasksByStatus, searchQuery, priorityFilter, labelFilter, sortMode])
+  }, [tasksByStatus, searchQuery, priorityFilter, labelFilter, sortMode, assigneeEmailById])
 
   // A small activation distance keeps the "move to" select and ordinary
   // clicks from being swallowed by an accidental drag.
@@ -456,8 +538,11 @@ export function KanbanBoard({
     markTouched(task.id)
     const newTask: Task = {
       ...task,
+      description: null,
       due_date: null,
       priority: null,
+      assignee_id: null,
+      created_at: new Date().toISOString(),
       labels: [],
       checklistCompleted: 0,
       checklistTotal: 0,
@@ -501,8 +586,10 @@ export function KanbanBoard({
             ? {
                 ...task,
                 title: updated.title,
+                description: updated.description,
                 due_date: updated.due_date,
                 priority: updated.priority,
+                assignee_id: updated.assignee_id,
               }
             : task
         )
@@ -533,6 +620,9 @@ export function KanbanBoard({
         ...previous[task.status],
         {
           ...task,
+          description: null,
+          assignee_id: null,
+          created_at: new Date().toISOString(),
           labels: [],
           checklistCompleted: 0,
           checklistTotal: 0,
@@ -617,6 +707,7 @@ export function KanbanBoard({
               status={status}
               projectId={projectId}
               tasks={visibleTasksByStatus[status]}
+              assigneeEmailById={assigneeEmailById}
               onTaskMove={handleKeyboardMove}
               onTaskCreated={handleTaskCreated}
               onTaskOpen={setOpenTaskId}

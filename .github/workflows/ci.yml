@@ -1,0 +1,105 @@
+name: CI
+
+# Sprint 3 Phase P. Requires repository secrets (see docs/CI-AND-DEPLOYMENT.md
+# for the full list and how to obtain each one) — until they're added,
+# every job below will fail at its first step that needs Supabase/Vercel
+# credentials. That's expected, not a bug in this workflow.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+  SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+jobs:
+  verify:
+    name: Type-check, lint, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npm run build
+
+  db-tests:
+    name: Database RLS and logic tests
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # Each script signs up real (throwaway) users against the real
+      # Supabase project configured via secrets above — same scripts run
+      # manually throughout this project's development (see
+      # docs/DECISION-LOG.md for why these exist as data-layer tests
+      # rather than relying solely on RLS policy review).
+      - run: npm run test:rls
+      - run: npm run test:workspace
+      - run: npm run test:project
+      - run: npm run test:task
+      - run: npm run test:position
+      - run: npm run test:move
+      - run: npm run test:roles
+
+  e2e:
+    name: Playwright end-to-end tests
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # --workers=1: this project's own history (DECISION-LOG.md) found
+      # that running many signups in parallel can hit Supabase Auth's
+      # rate limiting, which is an external-service condition, not an
+      # application bug — serial execution avoids manufacturing that
+      # flakiness in CI.
+      - run: npx playwright test --workers=1
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+  deploy:
+    name: Deploy to Vercel (production)
+    runs-on: ubuntu-latest
+    needs: [verify, db-tests, e2e]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm install --global vercel
+      - run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - run: vercel build --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      - run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}

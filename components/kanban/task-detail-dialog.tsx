@@ -23,6 +23,7 @@ import { TaskLabelPicker } from "@/components/kanban/task-label-picker"
 import { TaskChecklist } from "@/components/kanban/task-checklist"
 import { TaskComments } from "@/components/kanban/task-comments"
 import type { Label } from "@/lib/labels"
+import { getProjectMembers, type ProjectMember } from "@/lib/actions/projects"
 import {
   archiveTask,
   editTask,
@@ -40,6 +41,7 @@ const FIELD_LABELS: Record<string, string> = {
   description: "Description",
   due_date: "Due date",
   priority: "Priority",
+  assignee_id: "Assignee",
 }
 
 const PRIORITY_LABELS: Record<string, string> = {
@@ -52,6 +54,7 @@ const PRIORITY_LABELS: Record<string, string> = {
 function formatFieldValue(field: string, value: unknown): string {
   if (value === null || value === undefined || value === "") return "(none)"
   if (field === "priority") return PRIORITY_LABELS[String(value)] ?? String(value)
+  if (field === "assignee_id") return "(someone)"
   if (field === "description") {
     const text = String(value)
     return text.length > 40 ? `${text.slice(0, 40)}…` : text
@@ -116,6 +119,7 @@ export function TaskDetailDialog({
   const [descriptionDraft, setDescriptionDraft] = useState("")
   const [activity, setActivity] = useState<TaskActivityEntry[]>([])
   const [activityLoading, setActivityLoading] = useState(false)
+  const [members, setMembers] = useState<ProjectMember[]>([])
 
   useEffect(() => {
     if (!open || !taskId) return
@@ -146,6 +150,19 @@ export function TaskDetailDialog({
       active = false
     }
   }, [open, taskId])
+
+  const projectIdForMembers = taskDetail?.project_id ?? null
+  useEffect(() => {
+    if (!projectIdForMembers) return
+    let active = true
+    getProjectMembers(projectIdForMembers).then((result) => {
+      if (!active) return
+      setMembers("success" in result ? result.members : [])
+    })
+    return () => {
+      active = false
+    }
+  }, [projectIdForMembers])
 
   // The activity panel otherwise only loads once when the dialog opens —
   // without an explicit refetch, editing, archiving, or relabeling a task
@@ -294,6 +311,26 @@ export function TaskDetailDialog({
                 <option value="urgent">Urgent</option>
               </select>
             </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="task-assignee" className="text-sm font-medium">
+              Assignee
+            </label>
+            <select
+              id="task-assignee"
+              name="assigneeId"
+              key={`assignee-${taskDetail.id}`}
+              defaultValue={taskDetail.assignee_id ?? ""}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="">Unassigned</option>
+              {members.map((member) => (
+                <option key={member.user_id} value={member.user_id}>
+                  {member.email}
+                </option>
+              ))}
+            </select>
           </div>
 
           {editState && "error" in editState && (

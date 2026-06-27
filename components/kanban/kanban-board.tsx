@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { useSearchParams } from "next/navigation"
 import {
   DndContext,
   PointerSensor,
@@ -69,6 +70,17 @@ export function KanbanBoard({
   )
   const [error, setError] = useState<string | null>(null)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
+  const searchParams = useSearchParams()
+
+  // Lets dashboard links like /[workspaceSlug]/[projectId]?task=<id> jump
+  // straight to a task's detail dialog instead of landing on the board and
+  // requiring a manual search — runs once per mount, not tied to board state.
+  useEffect(() => {
+    const taskParam = searchParams.get("task")
+    if (taskParam) setOpenTaskId(taskParam)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const [, startTransition] = useTransition()
   const [searchQuery, setSearchQuery] = useState("")
   const [priorityFilter, setPriorityFilter] = useState("")

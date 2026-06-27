@@ -4,7 +4,9 @@ import { ProjectCreateDialog } from "@/components/project/project-create-dialog"
 import { ProjectFavoriteButton } from "@/components/project/project-favorite-button"
 import { ArchivedProjectsDialog } from "@/components/project/archived-projects-dialog"
 import { WorkspaceMembersDialog } from "@/components/workspace/workspace-members-dialog"
+import { WorkspaceSettingsDialog } from "@/components/workspace/workspace-settings-dialog"
 import { NotificationBell } from "@/components/notifications/notification-bell"
+import type { WorkspaceSettings } from "@/lib/actions/workspace-settings"
 
 type Project = { id: string; name: string; isFavorite: boolean }
 
@@ -33,11 +35,13 @@ export function ProjectSidebar({
   workspaceSlug,
   projects,
   currentUserRole,
+  workspaceSettings,
 }: {
   workspaceId: string
   workspaceSlug: string
   projects: Project[]
   currentUserRole: "owner" | "admin" | "member"
+  workspaceSettings: WorkspaceSettings
 }) {
   const favorites = projects.filter((project) => project.isFavorite)
   const isAdminOrOwner = currentUserRole === "owner" || currentUserRole === "admin"
@@ -53,6 +57,13 @@ export function ProjectSidebar({
           <WorkspaceMembersDialog workspaceId={workspaceId} currentUserRole={currentUserRole} />
         </div>
       </div>
+
+      {isAdminOrOwner && (
+        <WorkspaceSettingsDialog
+          workspace={workspaceSettings}
+          isOwner={currentUserRole === "owner"}
+        />
+      )}
 
       {favorites.length > 0 && (
         <div className="flex flex-col gap-1">

@@ -91,11 +91,14 @@ export function WorkspaceMembersDialog({
   }
 
   function handleLeave() {
+    setError(null)
     startTransition(async () => {
       const result = await leaveWorkspace(workspaceId)
-      if ("success" in result) {
-        router.push("/workspaces/new")
+      if ("error" in result) {
+        setError(result.error)
+        return
       }
+      router.push("/workspaces/new")
     })
   }
 
@@ -140,17 +143,20 @@ export function WorkspaceMembersDialog({
   }
 
   function handleRevokeInvite(invite: WorkspaceInvite) {
+    setError(null)
     startTransition(async () => {
       const result = await revokeInvite(invite.id)
-      if ("success" in result) {
-        setInvites((previous) =>
-          previous.map((existing) =>
-            existing.id === invite.id
-              ? { ...existing, revoked_at: new Date().toISOString() }
-              : existing
-          )
-        )
+      if ("error" in result) {
+        setError(result.error)
+        return
       }
+      setInvites((previous) =>
+        previous.map((existing) =>
+          existing.id === invite.id
+            ? { ...existing, revoked_at: new Date().toISOString() }
+            : existing
+        )
+      )
     })
   }
 

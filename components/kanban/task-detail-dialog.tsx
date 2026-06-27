@@ -124,6 +124,7 @@ export function TaskDetailDialog({
   const [editState, editAction, editPending] = useActionState(editTask, undefined)
   const [, startTransition] = useTransition()
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [archiveDeleteError, setArchiveDeleteError] = useState<string | null>(null)
   const [taskDetail, setTaskDetail] = useState<TaskDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [descriptionDraft, setDescriptionDraft] = useState("")
@@ -152,6 +153,7 @@ export function TaskDetailDialog({
     // TaskChecklist/TaskLabelPicker.
     let active = true
     setConfirmingDelete(false)
+    setArchiveDeleteError(null)
     setDetailLoading(true)
     setActivityLoading(true)
 
@@ -241,24 +243,30 @@ export function TaskDetailDialog({
   const isArchived = Boolean(taskDetail.archived_at)
 
   function handleArchiveToggle() {
+    setArchiveDeleteError(null)
     startTransition(async () => {
       const result = isArchived
         ? await unarchiveTask(taskDetail!.id)
         : await archiveTask(taskDetail!.id)
-      if ("success" in result) {
-        onTaskArchiveChange(taskDetail!.id, isArchived ? null : new Date().toISOString())
-        refetchActivity()
+      if ("error" in result) {
+        setArchiveDeleteError(result.error)
+        return
       }
+      onTaskArchiveChange(taskDetail!.id, isArchived ? null : new Date().toISOString())
+      refetchActivity()
     })
   }
 
   function handleDelete() {
+    setArchiveDeleteError(null)
     startTransition(async () => {
       const result = await deleteTask(taskDetail!.id)
-      if ("success" in result) {
-        onTaskDeleted(taskDetail!.id)
-        onOpenChange(false)
+      if ("error" in result) {
+        setArchiveDeleteError(result.error)
+        return
       }
+      onTaskDeleted(taskDetail!.id)
+      onOpenChange(false)
     })
   }
 
@@ -417,23 +425,30 @@ export function TaskDetailDialog({
           />
         </div>
 
-        <div className="flex items-center gap-2 border-t border-border pt-3">
-          <Button size="sm" variant="outline" onClick={handleArchiveToggle}>
-            {isArchived ? "Unarchive" : "Archive"}
-          </Button>
-          {confirmingDelete ? (
-            <Button size="sm" variant="destructive" onClick={handleDelete}>
-              Confirm delete
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => setConfirmingDelete(true)}
-            >
-              Delete
-            </Button>
+        <div className="flex flex-col gap-2 border-t border-border pt-3">
+          {archiveDeleteError && (
+            <p role="alert" className="text-sm text-destructive">
+              {archiveDeleteError}
+            </p>
           )}
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={handleArchiveToggle}>
+              {isArchived ? "Unarchive" : "Archive"}
+            </Button>
+            {confirmingDelete ? (
+              <Button size="sm" variant="destructive" onClick={handleDelete}>
+                Confirm delete
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => setConfirmingDelete(true)}
+              >
+                Delete
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="border-t border-border pt-3">

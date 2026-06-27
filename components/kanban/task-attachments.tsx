@@ -24,6 +24,7 @@ export function TaskAttachments({
 }) {
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [loading, setLoading] = useState(true)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [uploadState, uploadAction] = useActionState(uploadAttachment, undefined)
   const [, startTransition] = useTransition()
   const formRef = useRef<HTMLFormElement>(null)
@@ -55,10 +56,20 @@ export function TaskAttachments({
   }, [uploadState])
 
   function handleDelete(attachment: Attachment) {
+    setDeleteError(null)
     setAttachments((previous) => previous.filter((item) => item.id !== attachment.id))
     startTransition(async () => {
       const result = await deleteAttachment(attachment.id, taskId)
-      if ("success" in result) onChanged()
+      if ("error" in result) {
+        setDeleteError(result.error)
+        setAttachments((previous) =>
+          previous.some((item) => item.id === attachment.id)
+            ? previous
+            : [attachment, ...previous]
+        )
+        return
+      }
+      onChanged()
     })
   }
 
@@ -116,6 +127,11 @@ export function TaskAttachments({
       {uploadState && "error" in uploadState && (
         <p role="alert" className="text-sm text-destructive">
           {uploadState.error}
+        </p>
+      )}
+      {deleteError && (
+        <p role="alert" className="text-sm text-destructive">
+          {deleteError}
         </p>
       )}
     </div>

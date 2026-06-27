@@ -99,10 +99,15 @@ export default async function WorkspaceHomePage({
 
   if (!user || projectIds.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center p-6">
+      <div className="flex flex-1 items-center justify-center p-6 text-center">
         <p className="text-sm text-muted-foreground">
-          Select a project from the sidebar, or create a new one to get
-          started.
+          <span className="hidden md:inline">
+            Select a project from the sidebar, or create a new one to get
+            started.
+          </span>
+          <span className="md:hidden">
+            Tap the menu button below to create your first project.
+          </span>
         </p>
       </div>
     )

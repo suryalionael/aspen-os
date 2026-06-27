@@ -5,6 +5,7 @@ import { ProjectFavoriteButton } from "@/components/project/project-favorite-but
 import { ArchivedProjectsDialog } from "@/components/project/archived-projects-dialog"
 import { WorkspaceMembersDialog } from "@/components/workspace/workspace-members-dialog"
 import { WorkspaceSettingsDialog } from "@/components/workspace/workspace-settings-dialog"
+import { AuditLogDialog } from "@/components/workspace/audit-log-dialog"
 import { NotificationBell } from "@/components/notifications/notification-bell"
 import type { WorkspaceSettings } from "@/lib/actions/workspace-settings"
 
@@ -48,12 +49,22 @@ export function ProjectSidebar({
 
   return (
     <aside className="flex w-56 flex-shrink-0 flex-col gap-3 border-r border-border p-4">
-      <div className="flex items-center justify-between border-b border-border pb-3">
-        <h2 className="text-sm font-semibold text-muted-foreground">
-          Workspace
-        </h2>
-        <div className="flex items-center gap-1">
+      <div className="flex flex-col gap-1.5 border-b border-border pb-3">
+        {/* Two rows, not one — cramming the heading plus all three
+            buttons into a single flex row overflowed the sidebar's fixed
+            w-56 width, pushing "Members" past the sidebar's right edge
+            and into the main content area where it intercepted clicks
+            (confirmed directly via boundingBox(): its right edge landed
+            at ~290px against a 224px-wide sidebar). Same bug class as
+            the earlier "Archived projects" overflow — see DECISION-LOG. */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-muted-foreground">
+            Workspace
+          </h2>
           <NotificationBell workspaceId={workspaceId} workspaceSlug={workspaceSlug} />
+        </div>
+        <div className="flex items-center gap-1">
+          <AuditLogDialog workspaceId={workspaceId} />
           <WorkspaceMembersDialog workspaceId={workspaceId} currentUserRole={currentUserRole} />
         </div>
       </div>

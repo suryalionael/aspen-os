@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache"
 
 import { createClient } from "@/lib/supabase/server"
 import { logActivity } from "@/lib/actions/tasks"
+import { getTaskNotificationContext } from "@/lib/actions/notifications"
+import { logAuditEvent } from "@/lib/actions/audit"
 
 export type Attachment = {
   id: string
@@ -116,6 +118,16 @@ export async function uploadAttachment(
   await logActivity(supabase, taskId, user.id, "attachment_added", {
     file_name: file.name,
   })
+  const uploadContext = await getTaskNotificationContext(supabase, taskId)
+  if (uploadContext) {
+    await logAuditEvent(supabase, {
+      workspaceId: uploadContext.workspaceId,
+      actorId: user.id,
+      action: "task.attachment_added",
+      targetLabel: uploadContext.title,
+      metadata: { file_name: file.name },
+    })
+  }
 
   const { data: signed } = await supabase.storage
     .from("task-attachments")
@@ -168,6 +180,16 @@ export async function deleteAttachment(
     await logActivity(supabase, taskId, user.id, "attachment_removed", {
       file_name: attachment.file_name,
     })
+    const deleteContext = await getTaskNotificationContext(supabase, taskId)
+    if (deleteContext) {
+      await logAuditEvent(supabase, {
+        workspaceId: deleteContext.workspaceId,
+        actorId: user.id,
+        action: "task.attachment_removed",
+        targetLabel: deleteContext.title,
+        metadata: { file_name: attachment.file_name },
+      })
+    }
   }
 
   revalidatePath("/", "layout")

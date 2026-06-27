@@ -197,6 +197,42 @@ async function main() {
   assert(newOwnerRole === "owner", "New owner's role was not set to 'owner' after transfer")
   assert(oldOwnerRole === "admin", "Previous owner's role was not demoted to 'admin' after transfer")
 
+  // --- Sprint 3 Phase M: workspace archive/delete stay owner-only too.
+  // After the transfer above, `owner` is now an admin and `member` is now
+  // the owner. ---
+  const { error: adminArchiveError } = await owner.client.rpc("archive_workspace", {
+    p_workspace_id: workspace.id,
+  })
+  assert(
+    !!adminArchiveError,
+    "An admin (demoted ex-owner) was able to archive the workspace — owner-only RPC regression"
+  )
+
+  const { data: deletedByAdmin } = await owner.client
+    .from("workspaces")
+    .delete()
+    .eq("id", workspace.id)
+    .select()
+  assert(
+    (deletedByAdmin ?? []).length === 0,
+    "An admin was able to delete the workspace — owner-only RLS regression"
+  )
+
+  const { error: ownerArchiveError } = await member.client.rpc("archive_workspace", {
+    p_workspace_id: workspace.id,
+  })
+  assert(!ownerArchiveError, "The new owner was blocked from archiving their own workspace")
+
+  const { data: deletedByOwner } = await member.client
+    .from("workspaces")
+    .delete()
+    .eq("id", workspace.id)
+    .select()
+  assert(
+    (deletedByOwner ?? []).length === 1,
+    "The new owner was blocked from deleting their own workspace"
+  )
+
   console.log("All role-permission assertions passed.")
 }
 

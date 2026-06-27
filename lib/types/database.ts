@@ -481,25 +481,37 @@ export type Database = {
       }
       workspaces: {
         Row: {
+          archived_at: string | null
           created_at: string
           created_by: string
+          default_timezone: string | null
+          description: string | null
           id: string
+          logo_url: string | null
           name: string
           slug: string
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           created_at?: string
           created_by: string
+          default_timezone?: string | null
+          description?: string | null
           id?: string
+          logo_url?: string | null
           name: string
           slug: string
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           created_at?: string
           created_by?: string
+          default_timezone?: string | null
+          description?: string | null
           id?: string
+          logo_url?: string | null
           name?: string
           slug?: string
           updated_at?: string
@@ -511,6 +523,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      archive_workspace: {
+        Args: { p_workspace_id: string }
+        Returns: undefined
+      }
       change_member_role: {
         Args: { p_role: string; p_user_id: string; p_workspace_id: string }
         Returns: undefined
@@ -518,9 +534,13 @@ export type Database = {
       create_workspace_with_owner: {
         Args: { workspace_name: string; workspace_slug: string }
         Returns: {
+          archived_at: string | null
           created_at: string
           created_by: string
+          default_timezone: string | null
+          description: string | null
           id: string
+          logo_url: string | null
           name: string
           slug: string
           updated_at: string
@@ -585,6 +605,10 @@ export type Database = {
       }
       transfer_workspace_ownership: {
         Args: { p_new_owner_id: string; p_workspace_id: string }
+        Returns: undefined
+      }
+      unarchive_workspace: {
+        Args: { p_workspace_id: string }
         Returns: undefined
       }
     }

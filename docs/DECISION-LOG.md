@@ -329,13 +329,33 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
+### DEC-032 — Workspace settings (logo/description/timezone/danger zone/export) follow established patterns exactly
+**Decision:** Phase M adds `description`, `logo_url`, `default_timezone`, and `archived_at` to `workspaces` (migration 026). Logo upload reuses the avatars bucket's public-read pattern (DEC-024); general field edits (name/description/logo/timezone) move from "any member" to admin+owner, matching DEC-026's project-management framing; archive/restore/delete stay owner-only via dedicated RPCs (`archive_workspace`/`unarchive_workspace`), the same pattern as `change_member_role`/`transfer_workspace_ownership`. Export (JSON/CSV) gathers the workspace's projects and tasks server-side and streams them to the browser as a downloaded file — no new API route, just a Server Action returning a string that the client wraps in a Blob.
+**Rationale:** Resolves the open item from `pre-implementation-audit.md` finding M-1 ("no edit/delete for workspaces, projects, or tasks") — projects and tasks already gained this in Sprint 2; workspaces were the last gap. Reusing the avatars/project-archive/RPC patterns exactly (rather than inventing new ones) keeps the codebase's authorization model uniform across every entity type.
+**Alternatives Considered:** A `profiles`-style separate settings table (rejected — these are just columns on the workspace itself, no different access pattern from `name`/`slug`).
+**Tradeoffs:** Deleting a workspace cascades through every project/task/comment/etc. beneath it via existing FKs — there is no recovery once confirmed, same as the existing per-account delete (DEC from Sprint 1's account deletion feature).
+**Owner:** Product Engineer
+**Date:** 2026-06-28 (Sprint 3)
+**Future Revisit Conditions:** None anticipated.
+
+---
+
+### DEC-033 — Missing GRANT DELETE on workspaces (same class of bug as DEC's earlier missing-grant incident)
+**Decision/Finding:** Migration 026 added the first-ever DELETE policy on `public.workspaces` but omitted the table-level `grant delete ... to authenticated` — confirmed directly via a failing E2E test surfacing "permission denied for table workspaces" even though the RLS policy itself was correct. Fixed in migration 027.
+**Rationale:** RLS policies only take effect once the underlying `GRANT` permits the operation at all; this table never had a DELETE grant because nothing could delete a workspace before this phase. Recorded here (not just fixed silently) because it's the same root-cause class as the missing grant on `is_workspace_member_for_task` (migration 010/014) — worth naming the pattern explicitly: **whenever a migration adds the first policy for a new command (INSERT/UPDATE/DELETE) on an existing table, also check whether `authenticated` already has that command's table-level grant — it usually doesn't, since `create table` only grants what existing policies needed at the time.**
+**Owner:** Product Engineer
+**Date:** 2026-06-28 (Sprint 3)
+**Future Revisit Conditions:** None — this is a process note for future migrations, not a feature with a revisit trigger.
+
+---
+
 ## Open Items (Not Decisions)
 
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:
 
 - **Single-member workspaces vs. "shared with the whole team" messaging** (see DEC-011 / audit C-2) — needs an explicit Founder/PM call before pilot messaging goes out.
-- **No edit/delete for workspaces, projects, or tasks** (audit M-1) — not decided whether this is in Sprint 1 scope or an accepted pilot-period gap.
-- **No password-reset flow** (audit M-3) — not decided whether this is in Sprint 1 scope or covered by manual pilot support.
 - **Mobile Kanban board layout** (audit X-2) — `sprint-1-execution-plan.md` Phase 7 names an example behavior (horizontal scroll) but has not committed to it as a firm decision.
+
+(Audit M-3's "no password-reset flow" gap was resolved in Sprint 1 — see `app/(auth)/forgot-password` and `app/(auth)/update-password` — and is removed from this list as stale.)
 
 Do not treat any of the above as settled. If you resolve one, add it to the appropriate section above with a new `DEC-0##` ID rather than editing this list in place.

@@ -15,7 +15,7 @@ export default async function WorkspaceLayout({
 
   const { data: workspace } = await supabase
     .from("workspaces")
-    .select("id, name, slug")
+    .select("id, name, slug, description, logo_url, default_timezone, archived_at")
     .eq("slug", workspaceSlug)
     .maybeSingle()
 
@@ -59,6 +59,14 @@ export default async function WorkspaceLayout({
         workspaceSlug={workspace.slug}
         projects={projectsWithFavorite}
         currentUserRole={currentUserRole}
+        workspaceSettings={{
+          id: workspace.id,
+          name: workspace.name,
+          description: workspace.description,
+          logoUrl: workspace.logo_url,
+          defaultTimezone: workspace.default_timezone,
+          archivedAt: workspace.archived_at,
+        }}
       />
       <div className="flex flex-1 flex-col">{children}</div>
     </div>

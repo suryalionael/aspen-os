@@ -12,6 +12,7 @@ export async function WorkspaceSwitcher() {
   const { data } = await supabase
     .from("workspaces")
     .select("slug, name")
+    .is("archived_at", null)
     .order("created_at", { ascending: true })
 
   const workspaces = data ?? []

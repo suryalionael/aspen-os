@@ -396,6 +396,56 @@ export async function deleteTask(taskId: string): Promise<DeleteTaskResult> {
   return { success: true }
 }
 
+export type UpdateTaskDueDateResult =
+  | { error: string }
+  | { success: true; dueDate: string | null }
+
+// Dedicated, single-field action for Phase L's Calendar view drag-and-drop
+// (drop a card on a different day -> update just due_date) — mirrors why
+// moveTask is separate from the full editTask form: a drag gesture should
+// not also resubmit every other field's current value.
+export async function updateTaskDueDate(
+  taskId: string,
+  dueDate: string | null
+): Promise<UpdateTaskDueDateResult> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "You must be signed in to move a task." }
+  }
+
+  const { data: previousTask } = await supabase
+    .from("tasks")
+    .select("due_date")
+    .eq("id", taskId)
+    .maybeSingle()
+
+  const { data, error } = await supabase
+    .from("tasks")
+    .update({ due_date: dueDate })
+    .eq("id", taskId)
+    .select("due_date")
+    .single()
+
+  if (error || !data) {
+    return { error: error?.message ?? "Could not update due date." }
+  }
+
+  if (previousTask && previousTask.due_date !== data.due_date) {
+    await logActivity(supabase, taskId, user.id, "edited", {
+      field: "due_date",
+      from: previousTask.due_date,
+      to: data.due_date,
+    })
+  }
+
+  revalidatePath("/", "layout")
+  return { success: true, dueDate: data.due_date }
+}
+
 export type TaskDetail = {
   id: string
   project_id: string

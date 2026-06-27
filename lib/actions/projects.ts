@@ -172,3 +172,41 @@ export async function toggleFavoriteProject(
   revalidatePath("/", "layout")
   return { success: true }
 }
+
+export type ProjectMember = { user_id: string; email: string }
+
+// The assignee picker needs the task's workspace members, but a task only
+// carries project_id — this resolves workspace_id first, then reuses the
+// same get_workspace_members_with_email RPC the Members dialog uses
+// (DEC-022), rather than duplicating its membership-authorization logic.
+export async function getProjectMembers(
+  projectId: string
+): Promise<{ error: string } | { success: true; members: ProjectMember[] }> {
+  const supabase = await createClient()
+
+  const { data: project, error: projectError } = await supabase
+    .from("projects")
+    .select("workspace_id")
+    .eq("id", projectId)
+    .single()
+
+  if (projectError || !project) {
+    return { error: projectError?.message ?? "Project not found." }
+  }
+
+  const { data, error } = await supabase.rpc("get_workspace_members_with_email", {
+    p_workspace_id: project.workspace_id,
+  })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  return {
+    success: true,
+    members: (data ?? []).map((member: { user_id: string; email: string }) => ({
+      user_id: member.user_id,
+      email: member.email,
+    })),
+  }
+}

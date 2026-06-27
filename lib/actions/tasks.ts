@@ -208,6 +208,7 @@ export type EditedTask = {
   description: string | null
   due_date: string | null
   priority: string | null
+  assignee_id: string | null
 }
 
 export type EditTaskState =
@@ -226,6 +227,7 @@ export async function editTask(
   const description = String(formData.get("description") ?? "").trim()
   const dueDate = String(formData.get("dueDate") ?? "").trim()
   const priority = String(formData.get("priority") ?? "").trim()
+  const assigneeId = String(formData.get("assigneeId") ?? "").trim()
 
   if (!taskId) {
     return { error: "Missing task." }
@@ -248,7 +250,7 @@ export async function editTask(
 
   const { data: previousTask } = await supabase
     .from("tasks")
-    .select("title, description, due_date, priority")
+    .select("title, description, due_date, priority, assignee_id")
     .eq("id", taskId)
     .maybeSingle()
 
@@ -259,9 +261,10 @@ export async function editTask(
       description: description || null,
       due_date: dueDate || null,
       priority: priority || null,
+      assignee_id: assigneeId || null,
     })
     .eq("id", taskId)
-    .select("id, title, description, due_date, priority")
+    .select("id, title, description, due_date, priority, assignee_id")
     .single()
 
   if (error || !updatedTask) {
@@ -278,6 +281,11 @@ export async function editTask(
       },
       { field: "due_date", from: previousTask.due_date, to: updatedTask.due_date },
       { field: "priority", from: previousTask.priority, to: updatedTask.priority },
+      {
+        field: "assignee_id",
+        from: previousTask.assignee_id,
+        to: updatedTask.assignee_id,
+      },
     ].filter((change) => change.from !== change.to)
 
     for (const change of changes) {
@@ -372,6 +380,7 @@ export type TaskDetail = {
   description: string | null
   due_date: string | null
   priority: string | null
+  assignee_id: string | null
   archived_at: string | null
 }
 
@@ -382,7 +391,9 @@ export async function getTask(
 
   const { data, error } = await supabase
     .from("tasks")
-    .select("id, project_id, title, status, description, due_date, priority, archived_at")
+    .select(
+      "id, project_id, title, status, description, due_date, priority, assignee_id, archived_at"
+    )
     .eq("id", taskId)
     .single()
 

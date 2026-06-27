@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { TaskLabelPicker } from "@/components/kanban/task-label-picker"
 import { TaskChecklist } from "@/components/kanban/task-checklist"
 import { TaskComments } from "@/components/kanban/task-comments"
+import { TaskAttachments } from "@/components/kanban/task-attachments"
 import type { Label } from "@/lib/labels"
 import { getProjectMembers, type ProjectMember } from "@/lib/actions/projects"
 import { getProfile } from "@/lib/actions/profile"
@@ -85,6 +86,9 @@ const ACTIVITY_LABELS: Record<string, (metadata: Record<string, unknown> | null)
   checklist_item_removed: (metadata) =>
     `Checklist item "${String(metadata?.content ?? "")}" removed`,
   commented: () => "New comment",
+  attachment_added: (metadata) => `Attachment "${String(metadata?.file_name ?? "")}" added`,
+  attachment_removed: (metadata) =>
+    `Attachment "${String(metadata?.file_name ?? "")}" removed`,
 }
 
 function describeActivity(entry: TaskActivityEntry): string {
@@ -253,7 +257,7 @@ export function TaskDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-md overflow-y-auto">
+      <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Task details</DialogTitle>
         </DialogHeader>
@@ -355,6 +359,11 @@ export function TaskDetailDialog({
             {editPending ? "Saving…" : "Save"}
           </Button>
         </form>
+
+        <div className="border-t border-border pt-3">
+          <h3 className="mb-2 text-sm font-semibold">Attachments</h3>
+          <TaskAttachments taskId={taskDetail.id} onChanged={refetchActivity} />
+        </div>
 
         <div className="border-t border-border pt-3">
           <h3 className="mb-2 text-sm font-semibold">Labels</h3>

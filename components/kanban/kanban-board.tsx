@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react"
+import dynamic from "next/dynamic"
 import { useSearchParams } from "next/navigation"
 import {
   DndContext,
@@ -26,7 +27,14 @@ import { BoardToolbar, type SortMode } from "@/components/kanban/board-toolbar"
 import { KanbanColumn } from "@/components/kanban/kanban-column"
 import { TaskDetailDialog } from "@/components/kanban/task-detail-dialog"
 import { ToastStack } from "@/components/ui/toast-stack"
-import { CalendarView } from "@/components/calendar/calendar-view"
+
+// Loaded only when the user actually toggles to Calendar view — most
+// sessions only ever use Kanban, so this (and its @tanstack/react-virtual
+// + dnd-kit usage) shouldn't be in the initial bundle.
+const CalendarView = dynamic(
+  () => import("@/components/calendar/calendar-view").then((mod) => mod.CalendarView),
+  { ssr: false, loading: () => <p className="text-sm text-muted-foreground">Loading…</p> }
+)
 
 // How long a task ID counts as "just changed by this session" after a
 // local mutation — long enough to absorb the round-trip before this same

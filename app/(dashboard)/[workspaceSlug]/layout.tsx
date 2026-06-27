@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 
 import { createClient } from "@/lib/supabase/server"
+import { getWorkspaceBySlug } from "@/lib/data/workspace"
 import { ProjectSidebar } from "@/components/project/project-sidebar"
 
 export default async function WorkspaceLayout({
@@ -13,11 +14,7 @@ export default async function WorkspaceLayout({
   const { workspaceSlug } = await params
   const supabase = await createClient()
 
-  const { data: workspace } = await supabase
-    .from("workspaces")
-    .select("id, name, slug, description, logo_url, default_timezone, archived_at")
-    .eq("slug", workspaceSlug)
-    .maybeSingle()
+  const workspace = await getWorkspaceBySlug(workspaceSlug)
 
   if (!workspace) {
     notFound()

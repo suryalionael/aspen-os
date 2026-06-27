@@ -8,7 +8,7 @@ import {
   useState,
   useTransition,
 } from "react"
-import ReactMarkdown from "react-markdown"
+import dynamic from "next/dynamic"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -38,6 +38,10 @@ import {
   type TaskActivityEntry,
   type TaskDetail,
 } from "@/lib/actions/tasks"
+
+// Only needed while the dialog is open and has description text to
+// preview — keeps react-markdown out of the Kanban board's initial bundle.
+const ReactMarkdown = dynamic(() => import("react-markdown"), { ssr: false })
 
 const FIELD_LABELS: Record<string, string> = {
   title: "Title",

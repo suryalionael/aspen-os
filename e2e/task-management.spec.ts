@@ -1,3 +1,5 @@
+import path from "node:path"
+
 import { test, expect, type Page } from "@playwright/test"
 
 // The task detail dialog's child components (labels, checklist) each fetch
@@ -400,4 +402,65 @@ test("comments can be added, edited, and deleted", async ({ page }) => {
   await expect(
     page.getByTestId("task-card").getByText("💬", { exact: false })
   ).toHaveCount(0)
+})
+
+/**
+ * Sprint 2 Phase H: file attachments, stored in the private
+ * "task-attachments" Storage bucket (migration 022) and listed via
+ * signed URLs rather than a public path.
+ */
+test("attachments can be uploaded and removed", async ({ page }) => {
+  const unique = Date.now()
+  const email = `e2e-attachments-${unique}@example.com`
+  const password = "TestPassword123!"
+
+  await page.goto("/sign-up")
+  await page.getByLabel("Email").fill(email)
+  await page.getByLabel("Password").fill(password)
+  await page.getByRole("button", { name: "Create account" }).click()
+
+  await page.waitForURL("**/workspaces/new")
+  await page.getByLabel("Workspace name").fill(`E2E Workspace ${unique}`)
+  await page.getByRole("button", { name: "Create workspace" }).click()
+
+  await page.waitForURL((url) => /^\/[^/]+$/.test(url.pathname))
+
+  await page.getByRole("button", { name: "New" }).click()
+  await page.getByLabel("Project name").fill(`E2E Project ${unique}`)
+  await page.getByRole("button", { name: "Create project" }).click()
+
+  await page.waitForURL((url) => /^\/[^/]+\/[^/]+$/.test(url.pathname))
+
+  const quickAdd = page.getByPlaceholder("Add a task…")
+  await quickAdd.fill("Task with attachments")
+  await quickAdd.press("Enter")
+  await expect(page.getByText("Task with attachments")).toBeVisible()
+
+  await page.getByText("Task with attachments").click()
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
+  await waitForDialogSettled(page)
+
+  const uploadPersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
+  await page
+    .getByLabel("Attachment")
+    .setInputFiles(path.join(__dirname, "..", "app", "icon.png"))
+  await uploadPersisted
+
+  const attachmentItem = page.getByTestId("attachment-item")
+  await expect(attachmentItem.getByText("icon.png")).toBeVisible()
+  await expect(
+    page.getByText('Attachment "icon.png" added', { exact: false })
+  ).toBeVisible()
+
+  // The link is a real signed URL into the private bucket, not a bare path.
+  const href = await attachmentItem.getByRole("link", { name: "icon.png" }).getAttribute("href")
+  expect(href).toContain("task-attachments")
+
+  const deletePersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
+  await page.getByRole("button", { name: 'Delete "icon.png"' }).click()
+  await deletePersisted
+  await expect(page.getByTestId("attachment-item")).toHaveCount(0)
+  await expect(
+    page.getByText('Attachment "icon.png" removed', { exact: false })
+  ).toBeVisible()
 })

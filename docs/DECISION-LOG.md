@@ -256,6 +256,17 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
+### DEC-025 — Task attachments use a private Storage bucket with signed URLs, not the avatars bucket's public-read model
+**Decision:** Phase H's file attachments (migration 022: `task_attachments` table + `task-attachments` bucket) are private. Every read goes through a server-generated signed URL (1 hour TTL via `createSignedUrl`), gated by the same `is_workspace_member_for_task(uuid)` helper (migration 010) already used for comments/checklist/labels — both on the table's RLS and on `storage.objects` via `(storage.foldername(name))[1]::uuid`.
+**Rationale:** DEC-024 made the avatars bucket public specifically because avatars are meant to be shown to anyone; task content is the opposite — it's private to the task's own workspace, matching every other piece of task data in this schema. A public bucket would mean anyone with a guessed/leaked URL could read a task's files forever, with no membership check and no revocation path.
+**Alternatives Considered:** Public bucket with obscure (UUID-based) paths (rejected — "security by obscurity," no real access control, and a removed workspace member would keep working access forever); RLS-only with no signed URLs (not possible — `storage.objects` RLS governs API access, not direct object URLs, so a private bucket requires signed URLs to be readable from the browser at all).
+**Tradeoffs:** Signed URLs expire (1 hour here), so a link copied out of the app and reopened later will 403 — acceptable, since the app always re-fetches a fresh signed URL on open rather than caching the old one indefinitely.
+**Owner:** Product Engineer
+**Date:** 2026-06-27 (Sprint 2)
+**Future Revisit Conditions:** None anticipated.
+
+---
+
 ## Open Items (Not Decisions)
 
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:

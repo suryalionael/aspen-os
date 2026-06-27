@@ -25,6 +25,8 @@ const ACTIVITY_VERBS: Record<string, string> = {
   checklist_item_reopened: "reopened an item on",
   checklist_item_removed: "removed a checklist item from",
   commented: "commented on",
+  attachment_added: "added an attachment to",
+  attachment_removed: "removed an attachment from",
 }
 
 type DashboardTask = {

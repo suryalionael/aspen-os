@@ -11,7 +11,12 @@ import {
 } from "@dnd-kit/core"
 import { arrayMove } from "@dnd-kit/sortable"
 
-import { moveTask, type ArchivedTask, type EditedTask } from "@/lib/actions/tasks"
+import {
+  moveTask,
+  updateTaskDueDate,
+  type ArchivedTask,
+  type EditedTask,
+} from "@/lib/actions/tasks"
 import { getProjectMembers } from "@/lib/actions/projects"
 import type { Label } from "@/lib/labels"
 import { createClient } from "@/lib/supabase/client"
@@ -21,6 +26,7 @@ import { BoardToolbar, type SortMode } from "@/components/kanban/board-toolbar"
 import { KanbanColumn } from "@/components/kanban/kanban-column"
 import { TaskDetailDialog } from "@/components/kanban/task-detail-dialog"
 import { ToastStack } from "@/components/ui/toast-stack"
+import { CalendarView } from "@/components/calendar/calendar-view"
 
 // How long a task ID counts as "just changed by this session" after a
 // local mutation — long enough to absorb the round-trip before this same
@@ -91,6 +97,7 @@ export function KanbanBoard({
   const [labelFilter, setLabelFilter] = useState("")
   const [sortMode, setSortMode] = useState<SortMode>("manual")
   const [assigneeEmailById, setAssigneeEmailById] = useState<Map<string, string>>(new Map())
+  const [viewMode, setViewMode] = useState<"kanban" | "calendar">("kanban")
   const { toasts, pushToast } = useToasts()
   const recentlyTouched = useRef<Map<string, number>>(new Map())
 
@@ -345,6 +352,14 @@ export function KanbanBoard({
     return Array.from(seen.values())
   }, [tasksByStatus])
 
+  // Calendar view shows every non-archived task regardless of the Kanban
+  // toolbar's search/filter/sort — those are board-specific, not relevant
+  // to "what's due when".
+  const allTasks = useMemo(
+    () => STATUSES.flatMap((status) => tasksByStatus[status]),
+    [tasksByStatus]
+  )
+
   const isFiltered = Boolean(searchQuery || priorityFilter || labelFilter)
   const isViewModified = isFiltered || sortMode !== "manual"
 
@@ -434,6 +449,31 @@ export function KanbanBoard({
       })
       if ("error" in result) {
         // Revert the optimistic change and surface the failure.
+        setTasksByStatus(previousState)
+        setError(result.error)
+      }
+    })
+  }
+
+  // Phase L's Calendar view: dropping a task chip on a different day
+  // updates only due_date, unlike commitMove's fractional-position
+  // reordering — there's no within-day ordering to preserve.
+  function handleCalendarDueDateChange(taskId: string, dueDate: string) {
+    const previousState = tasksByStatus
+    markTouched(taskId)
+    setTasksByStatus((previous) => {
+      const next: TasksByStatus = { ...previous }
+      for (const status of STATUSES) {
+        next[status] = previous[status].map((task) =>
+          task.id === taskId ? { ...task, due_date: dueDate } : task
+        )
+      }
+      return next
+    })
+
+    startTransition(async () => {
+      const result = await updateTaskDueDate(taskId, dueDate)
+      if ("error" in result) {
         setTasksByStatus(previousState)
         setError(result.error)
       }
@@ -673,20 +713,44 @@ export function KanbanBoard({
   return (
     <div className="flex flex-1 flex-col gap-3 p-6">
       <div className="flex items-center justify-between gap-3">
-        <BoardToolbar
-          searchQuery={searchQuery}
-          onSearchQueryChange={setSearchQuery}
-          priorityFilter={priorityFilter}
-          onPriorityFilterChange={setPriorityFilter}
-          labelFilter={labelFilter}
-          onLabelFilterChange={setLabelFilter}
-          availableLabels={allLabels}
-          sortMode={sortMode}
-          onSortModeChange={setSortMode}
-        />
+        <div className="flex items-center gap-1 rounded-md border border-input p-0.5">
+          <button
+            type="button"
+            aria-pressed={viewMode === "kanban"}
+            onClick={() => setViewMode("kanban")}
+            className={`rounded px-2 py-1 text-sm ${
+              viewMode === "kanban" ? "bg-secondary" : "hover:bg-secondary/50"
+            }`}
+          >
+            Kanban
+          </button>
+          <button
+            type="button"
+            aria-pressed={viewMode === "calendar"}
+            onClick={() => setViewMode("calendar")}
+            className={`rounded px-2 py-1 text-sm ${
+              viewMode === "calendar" ? "bg-secondary" : "hover:bg-secondary/50"
+            }`}
+          >
+            Calendar
+          </button>
+        </div>
+        {viewMode === "kanban" && (
+          <BoardToolbar
+            searchQuery={searchQuery}
+            onSearchQueryChange={setSearchQuery}
+            priorityFilter={priorityFilter}
+            onPriorityFilterChange={setPriorityFilter}
+            labelFilter={labelFilter}
+            onLabelFilterChange={setLabelFilter}
+            availableLabels={allLabels}
+            sortMode={sortMode}
+            onSortModeChange={setSortMode}
+          />
+        )}
         <ArchivedTasksDialog projectId={projectId} onTaskRestored={handleTaskRestored} />
       </div>
-      {isViewModified && (
+      {viewMode === "kanban" && isViewModified && (
         <p className="text-xs text-muted-foreground">
           Drag and drop is disabled while searching, filtering, or sorting.
         </p>
@@ -699,23 +763,31 @@ export function KanbanBoard({
           {error}
         </p>
       )}
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-        <div className="flex flex-1 gap-4 overflow-x-auto">
-          {STATUSES.map((status) => (
-            <KanbanColumn
-              key={status}
-              status={status}
-              projectId={projectId}
-              tasks={visibleTasksByStatus[status]}
-              assigneeEmailById={assigneeEmailById}
-              onTaskMove={handleKeyboardMove}
-              onTaskCreated={handleTaskCreated}
-              onTaskOpen={setOpenTaskId}
-              isFiltered={isFiltered}
-            />
-          ))}
-        </div>
-      </DndContext>
+      {viewMode === "calendar" ? (
+        <CalendarView
+          tasks={allTasks}
+          onDueDateChange={handleCalendarDueDateChange}
+          onTaskOpen={setOpenTaskId}
+        />
+      ) : (
+        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+          <div className="flex flex-1 gap-4 overflow-x-auto">
+            {STATUSES.map((status) => (
+              <KanbanColumn
+                key={status}
+                status={status}
+                projectId={projectId}
+                tasks={visibleTasksByStatus[status]}
+                assigneeEmailById={assigneeEmailById}
+                onTaskMove={handleKeyboardMove}
+                onTaskCreated={handleTaskCreated}
+                onTaskOpen={setOpenTaskId}
+                isFiltered={isFiltered}
+              />
+            ))}
+          </div>
+        </DndContext>
+      )}
       <TaskDetailDialog
         taskId={openTaskId}
         open={openTaskId !== null}

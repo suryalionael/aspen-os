@@ -318,6 +318,17 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
+### DEC-031 — Calendar view shares KanbanBoard's client state; no separate fetch or route
+**Decision:** Phase L's Calendar view is a render-mode toggle inside the existing `KanbanBoard` component, sharing the same `tasksByStatus` state (flattened) rather than a separate page, route, or data fetch. Dragging a task chip onto a different day calls a new single-field `updateTaskDueDate` action (mirrors why `moveTask` is separate from the full `editTask` form).
+**Rationale:** The board already owns the authoritative, Realtime-synced task list for the project; duplicating that fetch for a second view would mean two sources of truth to keep in sync. A toggle (not a route) matches the literal spec ("Toggle between them") and avoids the cost of a new page/loading state for data that's already in memory.
+**Alternatives Considered:** A separate `/[workspaceSlug]/[projectId]/calendar` route with its own fetch (rejected — duplicates state, and the Realtime subscription would need to run twice or be lifted to a shared parent, more complexity for no real benefit at this scale).
+**Tradeoffs:** Calendar view ignores the Kanban toolbar's search/filter/sort (shows every non-archived task) — these are board-specific concerns, not "what's due when."
+**Owner:** Product Engineer
+**Date:** 2026-06-28 (Sprint 3)
+**Future Revisit Conditions:** None anticipated.
+
+---
+
 ## Open Items (Not Decisions)
 
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:

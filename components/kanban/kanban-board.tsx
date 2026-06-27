@@ -123,10 +123,16 @@ export function KanbanBoard({
       if (data.session) {
         supabase.realtime.setAuth(data.session.access_token)
       }
-      channel = buildChannel(data.session?.user.id ?? null)
+      // Phase G: respects the account page's "Show in-app notifications"
+      // toggle (default on) — defaults to enabled rather than disabled so
+      // an unset value (no session, or never-saved preference) doesn't
+      // silently suppress every toast.
+      const notificationsEnabled =
+        data.session?.user.user_metadata?.notifications_enabled !== false
+      channel = buildChannel(data.session?.user.id ?? null, notificationsEnabled)
     })
 
-    function buildChannel(currentUserId: string | null) {
+    function buildChannel(currentUserId: string | null, notificationsEnabled: boolean) {
       return supabase
         .channel(`tasks-${projectId}`)
         .on(
@@ -184,7 +190,7 @@ export function KanbanBoard({
                   [row.status]: [...previous[row.status], newTask],
                 }
               })
-              if (added && row.created_by !== currentUserId) {
+              if (added && notificationsEnabled && row.created_by !== currentUserId) {
                 pushToast(`New task: ${row.title}`)
               }
               return
@@ -244,7 +250,7 @@ export function KanbanBoard({
               return stripped
             })
 
-            if (!touched) pushToast(`Task updated: ${row.title}`)
+            if (!touched && notificationsEnabled) pushToast(`Task updated: ${row.title}`)
             return
           }
 
@@ -252,7 +258,7 @@ export function KanbanBoard({
               const oldRow = payload.old as { id: string }
               const touched = wasRecentlyTouched(oldRow.id)
               removeTaskFromState(oldRow.id)
-              if (!touched) pushToast("A task was deleted")
+              if (!touched && notificationsEnabled) pushToast("A task was deleted")
             }
           }
         )

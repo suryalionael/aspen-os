@@ -245,6 +245,17 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
+### DEC-024 — Profile preferences (bio/theme/timezone/notifications) live in auth.users.user_metadata, not a profiles table
+**Decision:** Phase G's bio, theme, timezone, and "show in-app notifications" preference are stored via `supabase.auth.updateUser({ data: {...} })`, landing in `auth.users.raw_user_meta_data`, rather than a new `profiles` table. Only the avatar — a binary file — needs real Storage (`avatars` bucket, migration 021, one object per user at `<user_id>/avatar.<ext>`, RLS-scoped to the owning user for write, public for read since avatars render as plain `<img>` tags with no per-request signed URL).
+**Rationale:** None of these four fields are ever queried across users or joined against in this sprint — each is read only by its own owner, on their own account page or to drive their own client-side behavior (theme class, notification gating). That is exactly the shape `user_metadata` is for, and avoids a table + RLS policies + migration for data with no cross-user access pattern. Avatars differ: they're binary and rendered to other users (e.g. a future members facepile), so they need Storage and a public-read policy regardless.
+**Alternatives Considered:** A dedicated `profiles` table keyed by `user_id` (rejected for this sprint — no current feature reads another user's bio/theme/timezone/notification setting; adding the table preemptively would be exactly the kind of unvalidated structure CLAUDE.md's "avoid overengineering" rule warns against). Revisit if a future feature needs to show one member's bio/timezone to another (e.g. a profile card in the Members dialog) — at that point a `profiles` table becomes justified by an actual cross-user read.
+**Tradeoffs:** `user_metadata` isn't indexed or queryable via PostgREST filters, which is fine since nothing filters on it; it's also visible to any code holding the user's session (not a secrecy boundary), which is acceptable since none of these four fields are sensitive.
+**Owner:** Product Engineer
+**Date:** 2026-06-27 (Sprint 2)
+**Future Revisit Conditions:** Move bio/theme/timezone/notifications into a real `profiles` table the moment any feature needs to read one user's profile data from another user's session (e.g. showing teammates' bios or timezones in the Members dialog).
+
+---
+
 ## Open Items (Not Decisions)
 
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:

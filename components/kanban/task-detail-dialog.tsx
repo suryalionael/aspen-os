@@ -24,6 +24,8 @@ import { TaskChecklist } from "@/components/kanban/task-checklist"
 import { TaskComments } from "@/components/kanban/task-comments"
 import type { Label } from "@/lib/labels"
 import { getProjectMembers, type ProjectMember } from "@/lib/actions/projects"
+import { getProfile } from "@/lib/actions/profile"
+import { formatDateTime } from "@/lib/utils/format-date"
 import {
   archiveTask,
   editTask,
@@ -120,6 +122,17 @@ export function TaskDetailDialog({
   const [activity, setActivity] = useState<TaskActivityEntry[]>([])
   const [activityLoading, setActivityLoading] = useState(false)
   const [members, setMembers] = useState<ProjectMember[]>([])
+  const [timezone, setTimezone] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    getProfile().then((profile) => {
+      if (active) setTimezone(profile?.timezone ?? null)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     if (!open || !taskId) return
@@ -407,7 +420,7 @@ export function TaskDetailDialog({
               {activity.map((entry) => (
                 <li key={entry.id}>
                   {describeActivity(entry)} ·{" "}
-                  {new Date(entry.created_at).toLocaleString()}
+                  {formatDateTime(entry.created_at, timezone)}
                 </li>
               ))}
             </ul>

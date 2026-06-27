@@ -96,13 +96,16 @@ export function TaskLabelPicker({
   }
 
   function handleDeleteLabel(label: Label) {
+    setError(null)
     startTransition(async () => {
       const result = await deleteLabel(label.id)
-      if ("success" in result) {
-        setProjectLabels((previous) => previous.filter((l) => l.id !== label.id))
-        if (taskLabels.some((l) => l.id === label.id)) {
-          notifyChange(taskLabels.filter((l) => l.id !== label.id))
-        }
+      if ("error" in result) {
+        setError(result.error)
+        return
+      }
+      setProjectLabels((previous) => previous.filter((l) => l.id !== label.id))
+      if (taskLabels.some((l) => l.id === label.id)) {
+        notifyChange(taskLabels.filter((l) => l.id !== label.id))
       }
     })
   }

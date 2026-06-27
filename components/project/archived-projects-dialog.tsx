@@ -20,11 +20,13 @@ export function ArchivedProjectsDialog({ workspaceId }: { workspaceId: string })
   const [open, setOpen] = useState(false)
   const [projects, setProjects] = useState<ArchivedProject[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [, startTransition] = useTransition()
 
   useEffect(() => {
     if (!open) return
     let active = true
+    setError(null)
     setLoading(true)
     getArchivedProjects(workspaceId).then((result) => {
       if (!active) return
@@ -37,11 +39,14 @@ export function ArchivedProjectsDialog({ workspaceId }: { workspaceId: string })
   }, [open, workspaceId])
 
   function handleRestore(project: ArchivedProject) {
+    setError(null)
     startTransition(async () => {
       const result = await unarchiveProject(project.id)
-      if ("success" in result) {
-        setProjects((previous) => previous.filter((p) => p.id !== project.id))
+      if ("error" in result) {
+        setError(result.error)
+        return
       }
+      setProjects((previous) => previous.filter((p) => p.id !== project.id))
     })
   }
 
@@ -56,6 +61,11 @@ export function ArchivedProjectsDialog({ workspaceId }: { workspaceId: string })
         <DialogHeader>
           <DialogTitle>Archived projects</DialogTitle>
         </DialogHeader>
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
         {loading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : projects.length === 0 ? (

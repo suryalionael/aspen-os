@@ -26,22 +26,24 @@ export default async function DashboardLayout({
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <ThemeSync initialTheme={theme} />
-      <header className="flex items-center justify-between border-b border-border px-6 py-4">
-        <div className="flex items-center gap-6">
-          <span className="font-semibold text-primary">Aspen OS</span>
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-3 sm:px-6 sm:py-4">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-6">
+          <span className="flex-shrink-0 font-semibold text-primary">Aspen OS</span>
           <WorkspaceSwitcher />
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {avatarUrl && (
             <Image
               src={avatarUrl}
               alt=""
               width={24}
               height={24}
-              className="size-6 rounded-full object-cover"
+              className="size-6 flex-shrink-0 rounded-full object-cover"
             />
           )}
-          <span className="text-sm text-muted-foreground">{user?.email}</span>
+          <span className="hidden max-w-[160px] truncate text-sm text-muted-foreground sm:inline">
+            {user?.email}
+          </span>
           <Link
             href="/account"
             className="text-xs text-muted-foreground underline-offset-4 hover:underline"

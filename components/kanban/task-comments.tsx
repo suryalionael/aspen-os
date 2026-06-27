@@ -168,24 +168,34 @@ export function TaskComments({
     const content = editDraft.trim()
     if (!content || !editingId) return
     const id = editingId
+    setError(null)
     startTransition(async () => {
       const result = await editComment(id, content)
-      if ("success" in result) {
-        setComments((previous) =>
-          previous.map((comment) => (comment.id === id ? result.comment : comment))
-        )
-        setEditingId(null)
+      if ("error" in result) {
+        setError(result.error)
+        return
       }
+      setComments((previous) =>
+        previous.map((comment) => (comment.id === id ? result.comment : comment))
+      )
+      setEditingId(null)
     })
   }
 
   function handleDelete(comment: Comment) {
+    setError(null)
     markTouched(comment.id)
+    const previous = comments
     const next = comments.filter((existing) => existing.id !== comment.id)
     setComments(next)
     startTransition(async () => {
       const result = await deleteComment(comment.id)
-      if ("success" in result) onChanged(next.length)
+      if ("error" in result) {
+        setError(result.error)
+        setComments(previous)
+        return
+      }
+      onChanged(next.length)
     })
   }
 

@@ -396,10 +396,32 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
+### DEC-039 — Pilot Readiness audit: sidebar becomes a slide-in drawer below `md`, not a second persistent column
+**Finding:** A live mobile-viewport (390×844) walkthrough — not just code review — showed the dashboard shell was unusable on a phone: `ProjectSidebar` was a fixed `w-56` column with no breakpoint, leaving roughly half the screen for actual content, and the header (workspace switcher, email, account link, sign-out) had no wrap/truncation, causing visible text overlap. This was the single most severe finding of the audit — five nonprofit pilot orgs starting "tomorrow" will have staff opening this on a phone.
+**Decision:** `ProjectSidebar` (`components/project/project-sidebar.tsx`) is now a client component that, below `md`, renders as a `fixed` slide-in drawer (closed by default) toggled by a floating button, with a tap-to-close backdrop and auto-close on navigating to a project. At `md` and up it is unchanged — same always-visible `w-56` column. The dashboard header (`app/(dashboard)/layout.tsx`) gained `flex-wrap`, truncated/hidden the email on small screens, and the empty-state copy (`app/(dashboard)/[workspaceSlug]/page.tsx`) no longer says "from the sidebar" on mobile, since the sidebar isn't visible there by default.
+**Rationale:** Resolves the open question logged below this entry's old location (mobile Kanban layout) — the Kanban board itself already had `overflow-x-auto` on its column row (Phase O), so columns scroll horizontally fine once they're not also fighting a permanently-visible sidebar for space. A drawer (rather than e.g. a bottom tab bar or a second navigation paradigm) was chosen because it reuses the exact same `ProjectSidebar` content and all its existing dialogs (Members, Audit log, Workspace settings, Archived projects) with zero duplication — only the container's visibility/position changes per breakpoint.
+**Alternatives Considered:** A separate mobile-only nav component (rejected — duplicates every dialog trigger already in `ProjectSidebar`, doubling future maintenance); collapsing the sidebar into an accordion within the page flow instead of an overlay (rejected — pushes board/calendar content below the fold on every page load, worse than an opt-in drawer).
+**Tradeoffs:** The drawer overlays the top header while open (covers it rather than sitting below it) — acceptable since it's a transient, explicitly-opened state with an obvious close affordance (backdrop tap or the toggle button itself), not a permanent layout change.
+**Owner:** Product Engineer, UX Reviewer
+**Date:** 2026-06-27 (Pilot Readiness audit)
+**Future Revisit Conditions:** If pilot feedback shows users don't discover the floating toggle button, consider promoting it into the header row instead of a floating circular button.
+
+---
+
+### DEC-040 — Pilot Readiness audit: fixed a repeated silent-failure pattern across destructive/mutating actions
+**Finding:** Grepping every component for `"success" in result` and checking whether the matching `"error" in result` branch existed turned up the same bug in roughly a dozen handlers: `project-settings-dialog.tsx` (archive/delete), `task-detail-dialog.tsx` (archive/delete), `archived-projects-dialog.tsx`/`archived-tasks-dialog.tsx` (restore), `workspace-members-dialog.tsx` (leave workspace, revoke invite), `audit-log-dialog.tsx` (CSV export), and `task-attachments.tsx`/`task-checklist.tsx`/`task-comments.tsx`/`task-label-picker.tsx` (delete). Each checked only the success case and did nothing on failure — clicking the button produced no visible feedback at all if the Server Action returned `{error}`. Several were worse than silent: `task-attachments.tsx`, `task-checklist.tsx`, and `task-comments.tsx`'s delete handlers applied an optimistic UI removal with no rollback, so a failed delete left the item looking gone while it still existed server-side (reappearing on refresh). `project-settings-dialog.tsx`'s `handleDelete` had no success path either — a *successful* delete left the user stranded on the now-nonexistent project's page.
+**Decision:** Every handler above now mirrors the pattern already used correctly elsewhere in the codebase (`workspace-settings-dialog.tsx`, `task-checklist.tsx`'s own `handleToggle`): check `"error" in result` first, call `setError`/render a `role="alert"` message and (for the optimistic cases) roll back the local state, otherwise proceed. `project-settings-dialog.tsx`'s delete handler now navigates to the workspace root on success, matching its archive handler.
+**Rationale:** This is a bug-fixing item under the Pilot Readiness audit (not a new feature) — a user clicking Archive/Delete/Restore/Leave/Revoke/Export and seeing nothing happen is exactly the kind of "looks broken" experience that erodes trust in a pilot's first week, and the rollback gaps are real data-consistency bugs, not just missing polish.
+**Alternatives Considered:** A shared `useServerAction` hook to enforce this pattern everywhere going forward (rejected for this pass — out of scope for an audit-and-harden sprint per the explicit "do not add new features" instruction; worth proposing separately if this pattern recurs a third time, echoing DEC-035's framing for the sidebar header).
+**Owner:** Product Engineer
+**Date:** 2026-06-27 (Pilot Readiness audit)
+**Future Revisit Conditions:** If a new mutating handler is added without an error branch, treat it as a regression of this fix, not a one-off — the grep used to find these (`grep -rln '"success" in result' components/`) is cheap to re-run before any release.
+
+---
+
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:
 
 - **Single-member workspaces vs. "shared with the whole team" messaging** (see DEC-011 / audit C-2) — needs an explicit Founder/PM call before pilot messaging goes out.
-- **Mobile Kanban board layout** (audit X-2) — `sprint-1-execution-plan.md` Phase 7 names an example behavior (horizontal scroll) but has not committed to it as a firm decision.
 
 (Audit M-3's "no password-reset flow" gap was resolved in Sprint 1 — see `app/(auth)/forgot-password` and `app/(auth)/update-password` — and is removed from this list as stale.)
 

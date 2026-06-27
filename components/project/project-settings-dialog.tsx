@@ -49,17 +49,26 @@ export function ProjectSettingsDialog({
   }
 
   function handleArchive() {
+    setError(null)
     startTransition(async () => {
       const result = await archiveProject(projectId)
-      if ("success" in result) {
-        router.push(`/${workspaceSlug}`)
+      if ("error" in result) {
+        setError(result.error)
+        return
       }
+      router.push(`/${workspaceSlug}`)
     })
   }
 
   function handleDelete() {
+    setError(null)
     startTransition(async () => {
-      await deleteProject(projectId, workspaceSlug)
+      const result = await deleteProject(projectId, workspaceSlug)
+      if ("error" in result) {
+        setError(result.error)
+        return
+      }
+      router.push(`/${workspaceSlug}`)
     })
   }
 

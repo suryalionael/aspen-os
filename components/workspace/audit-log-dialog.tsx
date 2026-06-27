@@ -74,6 +74,7 @@ export function AuditLogDialog({ workspaceId }: { workspaceId: string }) {
   const [actionFilter, setActionFilter] = useState("")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
+  const [exportError, setExportError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
 
@@ -157,10 +158,13 @@ export function AuditLogDialog({ workspaceId }: { workspaceId: string }) {
   }
 
   function handleExportCsv() {
+    setExportError(null)
     exportAuditLogCsv(workspaceId).then((result) => {
-      if ("success" in result) {
-        downloadFile(result.csv, "audit-log.csv", "text/csv")
+      if ("error" in result) {
+        setExportError(result.error)
+        return
       }
+      downloadFile(result.csv, "audit-log.csv", "text/csv")
     })
   }
 
@@ -253,6 +257,12 @@ export function AuditLogDialog({ workspaceId }: { workspaceId: string }) {
             Export CSV
           </Button>
         </div>
+
+        {exportError && (
+          <p role="alert" className="text-sm text-destructive">
+            {exportError}
+          </p>
+        )}
 
         {loading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>

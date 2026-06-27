@@ -22,6 +22,7 @@ export function TaskChecklist({
   const [items, setItems] = useState<ChecklistItem[]>([])
   const [loading, setLoading] = useState(true)
   const [newContent, setNewContent] = useState("")
+  const [error, setError] = useState<string | null>(null)
   const [, startTransition] = useTransition()
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -59,19 +60,23 @@ export function TaskChecklist({
   function handleAdd() {
     const content = newContent.trim()
     if (!content) return
+    setError(null)
     startTransition(async () => {
       const result = await addChecklistItem(taskId, content)
-      if ("success" in result) {
-        const next = [...items, result.item]
-        setItems(next)
-        setNewContent("")
-        inputRef.current?.focus()
-        reportCounts(next)
+      if ("error" in result) {
+        setError(result.error)
+        return
       }
+      const next = [...items, result.item]
+      setItems(next)
+      setNewContent("")
+      inputRef.current?.focus()
+      reportCounts(next)
     })
   }
 
   function handleToggle(item: ChecklistItem) {
+    setError(null)
     const nextCompleted = !item.completed
     const optimistic = items.map((existing) =>
       existing.id === item.id ? { ...existing, completed: nextCompleted } : existing
@@ -80,6 +85,7 @@ export function TaskChecklist({
     startTransition(async () => {
       const result = await toggleChecklistItem(item.id, taskId, nextCompleted)
       if ("error" in result) {
+        setError(result.error)
         setItems(items)
         return
       }
@@ -88,11 +94,17 @@ export function TaskChecklist({
   }
 
   function handleDelete(item: ChecklistItem) {
+    setError(null)
     const next = items.filter((existing) => existing.id !== item.id)
     setItems(next)
     startTransition(async () => {
       const result = await deleteChecklistItem(item.id, taskId)
-      if ("success" in result) reportCounts(next)
+      if ("error" in result) {
+        setError(result.error)
+        setItems(items)
+        return
+      }
+      reportCounts(next)
     })
   }
 
@@ -160,6 +172,11 @@ export function TaskChecklist({
           Add item
         </Button>
       </div>
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
     </div>
   )
 }

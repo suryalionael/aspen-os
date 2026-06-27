@@ -29,11 +29,13 @@ export function ArchivedTasksDialog({
   const [open, setOpen] = useState(false)
   const [tasks, setTasks] = useState<ArchivedTask[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [, startTransition] = useTransition()
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
+    setError(null)
     setLoading(true)
     getArchivedTasks(projectId).then((result) => {
       setTasks("success" in result ? result.tasks : [])
@@ -42,12 +44,15 @@ export function ArchivedTasksDialog({
   }, [open, projectId])
 
   function handleRestore(task: ArchivedTask) {
+    setError(null)
     startTransition(async () => {
       const result = await unarchiveTask(task.id)
-      if ("success" in result) {
-        setTasks((previous) => previous.filter((t) => t.id !== task.id))
-        onTaskRestored(task)
+      if ("error" in result) {
+        setError(result.error)
+        return
       }
+      setTasks((previous) => previous.filter((t) => t.id !== task.id))
+      onTaskRestored(task)
     })
   }
 
@@ -73,6 +78,11 @@ export function ArchivedTasksDialog({
         <DialogHeader>
           <DialogTitle>Archived tasks</DialogTitle>
         </DialogHeader>
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
         {loading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : tasks.length === 0 ? (

@@ -4,7 +4,7 @@ The simplest and most enjoyable project operating system for nonprofit and commu
 
 ## Stack
 
-Next.js (App Router) · TypeScript · Tailwind CSS · shadcn/ui · Supabase · Vercel
+Next.js (App Router) · TypeScript · Tailwind CSS · shadcn/ui · Supabase · Vercel.
 
 ## Getting Started
 

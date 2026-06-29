@@ -84,6 +84,7 @@ type Task = {
   checklistTotal: number
   commentCount: number
   attachmentCount: number
+  progress: number
 }
 type TasksByStatus = Record<string, Task[]>
 
@@ -275,6 +276,7 @@ export function KanbanBoard({
                   checklistTotal: 0,
                   commentCount: 0,
                   attachmentCount: 0,
+                  progress: 0,
                 }
                 return {
                   ...previous,
@@ -345,6 +347,7 @@ export function KanbanBoard({
                     checklistTotal: 0,
                     commentCount: 0,
                     attachmentCount: 0,
+                    progress: 0,
                   }
               stripped[row.status] = [...stripped[row.status], merged]
               return stripped
@@ -645,6 +648,7 @@ export function KanbanBoard({
       checklistTotal: 0,
       commentCount: 0,
       attachmentCount: 0,
+      progress: 0,
     }
     setTasksByStatus((previous) => {
       // The Realtime echo of this same INSERT can arrive over the
@@ -688,6 +692,7 @@ export function KanbanBoard({
                 due_date: updated.due_date,
                 priority: updated.priority,
                 assignee_id: updated.assignee_id,
+                progress: updated.progress,
               }
             : task
         )
@@ -726,6 +731,7 @@ export function KanbanBoard({
           checklistTotal: 0,
           commentCount: 0,
           attachmentCount: 0,
+          progress: 0,
         },
       ],
     }))
@@ -896,6 +902,7 @@ export function KanbanBoard({
                     checklistTotal={draggingTask.checklistTotal}
                     commentCount={draggingTask.commentCount}
                     attachmentCount={draggingTask.attachmentCount}
+                    progress={draggingTask.progress}
                     onMove={() => {}}
                     onOpen={() => {}}
                   />

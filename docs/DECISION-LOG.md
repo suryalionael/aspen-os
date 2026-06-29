@@ -470,6 +470,16 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
+### DEC-046 — Sprint 4 Priority 8: per-task progress is checklist-derived when a checklist exists, else a manual percentage; project progress aggregates it
+**Decision:** Migration 032 adds `tasks.progress smallint not null default 0 check (between 0 and 100)` — a manually-set percentage, edited via a range input in the task detail form. `lib/utils/task-progress.ts` centralizes the rule both the card and the project-wide aggregates use: `getTaskProgress(task)` returns checklist completion when `checklistTotal > 0`, otherwise the manual `progress` value; `getAverageProgress(tasks)` averages that across a list. `ProjectHeader` and `ProjectCompletionSidebar` (Priorities 3 and 5) now show this average instead of a binary done/not-done completion percentage.
+**Rationale:** The brief explicitly asked for "checklist progress OR manual %," and for project progress to "automatically aggregate task progress" — a plain done-count was already in place from Priority 3 but doesn't reflect partial progress on in-flight tasks (a task that's 90% through its checklist still only countED as 0% before this). Centralizing the per-task rule in one helper (rather than recomputing it separately in the card, header, and sidebar) was the direct lesson from Priority 6/7's work in the same area this sprint.
+**Tradeoffs:** The manual progress field is always present in the edit form, with a hint that it's only used when no checklist exists, rather than being conditionally hidden — `TaskDetailDialog` doesn't currently track live checklist count itself (only the child `TaskChecklist` component does, reporting counts upward), so conditionally hiding the field would have required threading that state up for a minor polish gain.
+**Owner:** Product Engineer
+**Date:** 2026-06-29 (Sprint 4)
+**Future Revisit Conditions:** If the always-visible manual field proves confusing in pilot feedback, thread checklist count into `TaskDetailDialog` and hide the field when `checklistTotal > 0`.
+
+---
+
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:
 
 - **Single-member workspaces vs. "shared with the whole team" messaging** (see DEC-011 / audit C-2) — needs an explicit Founder/PM call before pilot messaging goes out.

@@ -251,6 +251,7 @@ export type EditedTask = {
   due_date: string | null
   priority: string | null
   assignee_id: string | null
+  progress: number
 }
 
 export type EditTaskState =
@@ -270,6 +271,10 @@ export async function editTask(
   const dueDate = String(formData.get("dueDate") ?? "").trim()
   const priority = String(formData.get("priority") ?? "").trim()
   const assigneeId = String(formData.get("assigneeId") ?? "").trim()
+  const progressRaw = Number(formData.get("progress") ?? 0)
+  const progress = Number.isFinite(progressRaw)
+    ? Math.min(100, Math.max(0, Math.round(progressRaw)))
+    : 0
 
   if (!taskId) {
     return { error: "Missing task." }
@@ -304,9 +309,10 @@ export async function editTask(
       due_date: dueDate || null,
       priority: priority || null,
       assignee_id: assigneeId || null,
+      progress,
     })
     .eq("id", taskId)
-    .select("id, title, description, due_date, priority, assignee_id")
+    .select("id, title, description, due_date, priority, assignee_id, progress")
     .single()
 
   if (error || !updatedTask) {
@@ -543,6 +549,7 @@ export type TaskDetail = {
   priority: string | null
   assignee_id: string | null
   archived_at: string | null
+  progress: number
 }
 
 export async function getTask(
@@ -553,7 +560,7 @@ export async function getTask(
   const { data, error } = await supabase
     .from("tasks")
     .select(
-      "id, project_id, title, status, description, due_date, priority, assignee_id, archived_at"
+      "id, project_id, title, status, description, due_date, priority, assignee_id, archived_at, progress"
     )
     .eq("id", taskId)
     .single()

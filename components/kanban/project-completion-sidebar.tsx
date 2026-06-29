@@ -3,12 +3,16 @@
 import { useMemo } from "react"
 
 import { formatDueDate, isOverdue, toDateKey } from "@/lib/utils/dates"
+import { getAverageProgress } from "@/lib/utils/task-progress"
 
 type Task = {
   id: string
   title: string
   status: string
   due_date: string | null
+  progress: number
+  checklistCompleted: number
+  checklistTotal: number
 }
 
 function Section({
@@ -79,7 +83,7 @@ export function ProjectCompletionSidebar({
     const monthEndKey = toDateKey(monthEnd)
 
     return {
-      percent: totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0,
+      percent: getAverageProgress(tasks),
       completed: completedCount,
       total: totalCount,
       today: open.filter((task) => task.due_date === todayKey),

@@ -34,6 +34,7 @@ type TaskCardProps = {
   checklistTotal: number
   commentCount: number
   attachmentCount: number
+  progress: number
   onMove: (id: string, newStatus: string) => void
   onOpen: (id: string) => void
 }
@@ -55,6 +56,7 @@ function TaskCardBody({
   checklistTotal,
   commentCount,
   attachmentCount,
+  progress,
   onMove,
   onOpen,
   dragHandleProps,
@@ -94,7 +96,7 @@ function TaskCardBody({
           ))}
         </div>
       )}
-      {checklistTotal > 0 && (
+      {checklistTotal > 0 ? (
         <div className="flex items-center gap-1.5">
           <div className="h-1 flex-1 overflow-hidden rounded-full bg-secondary">
             <div
@@ -106,6 +108,18 @@ function TaskCardBody({
             {checklistCompleted}/{checklistTotal}
           </span>
         </div>
+      ) : (
+        progress > 0 && (
+          <div className="flex items-center gap-1.5">
+            <div className="h-1 flex-1 overflow-hidden rounded-full bg-secondary">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <span className="flex-shrink-0 text-xs text-muted-foreground">{progress}%</span>
+          </div>
+        )
       )}
       {(dueDate ||
         priority ||

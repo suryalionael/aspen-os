@@ -449,6 +449,17 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
+### DEC-044 — Sprint 4 Priority 6: richer task cards; fixed a latent setState-during-render bug found along the way
+**Decision:** `TaskCard` gained a visual checklist progress bar (alongside the existing "x/y" text) and an attachment-count indicator (📎), wired the same way checklist/comment counts already are: `task_attachments(id)` added to the project page's task query, an `attachmentCount` field threaded through `Task`/`KanbanColumn`/`TaskCard`, and a new `onAttachmentCountChanged` callback from `TaskAttachments` → `TaskDetailDialog` → `KanbanBoard`, mirroring `onCommentCountChanged`.
+**Finding:** While verifying this end-to-end (add a comment after uploading an attachment, confirm both counts persist), Playwright surfaced a real React warning — "Cannot update a component (KanbanBoard) while rendering a different component (TaskComments)" — coming from `task-comments.tsx`'s Realtime INSERT/DELETE handlers, which called `onChanged(next.length)` *inside* the `setComments` updater function. That callback chain ends in `KanbanBoard.setTasksByStatus`, so updating a different component's state from inside another component's state-updater is exactly the anti-pattern React flags, even though both counts ended up correct in practice (confirmed via direct state inspection before fixing it — not guessed).
+**Fix:** Added a `commentsRef` kept in sync via a `useEffect`, so the Realtime handlers read the latest comments list, compute `next` as a plain value, then call `setComments(next)` and `onChanged(next.length)` as separate statements — the same shape already used by this same file's own `handleAdd`/`handleDelete`, just applied to the Realtime path too.
+**Rationale:** This was pre-existing code, last touched in the Pilot Readiness pass (confirmed via `git log`) — not something this phase's task-card work introduced. Fixed in place rather than deferred since it's a one-line-shaped, low-risk correctness fix directly adjacent to the comment-count feature being verified, not a new scope.
+**Owner:** Product Engineer
+**Date:** 2026-06-29 (Sprint 4)
+**Future Revisit Conditions:** If a similar warning appears from another component's Realtime handler, check for the same "side effect inside a setState updater" shape before assuming it's something new.
+
+---
+
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:
 
 - **Single-member workspaces vs. "shared with the whole team" messaging** (see DEC-011 / audit C-2) — needs an explicit Founder/PM call before pilot messaging goes out.

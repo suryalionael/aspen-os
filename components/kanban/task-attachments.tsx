@@ -20,7 +20,7 @@ export function TaskAttachments({
   onChanged,
 }: {
   taskId: string
-  onChanged: () => void
+  onChanged: (count: number) => void
 }) {
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [loading, setLoading] = useState(true)
@@ -47,9 +47,10 @@ export function TaskAttachments({
 
   useEffect(() => {
     if (uploadState && "success" in uploadState) {
-      setAttachments((previous) => [uploadState.attachment, ...previous])
+      const next = [uploadState.attachment, ...attachments]
+      setAttachments(next)
       formRef.current?.reset()
-      onChanged()
+      onChanged(next.length)
     }
     // Runs once per upload result, not on every onChanged identity change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -57,7 +58,8 @@ export function TaskAttachments({
 
   function handleDelete(attachment: Attachment) {
     setDeleteError(null)
-    setAttachments((previous) => previous.filter((item) => item.id !== attachment.id))
+    const next = attachments.filter((item) => item.id !== attachment.id)
+    setAttachments(next)
     startTransition(async () => {
       const result = await deleteAttachment(attachment.id, taskId)
       if ("error" in result) {
@@ -69,7 +71,7 @@ export function TaskAttachments({
         )
         return
       }
-      onChanged()
+      onChanged(next.length)
     })
   }
 

@@ -58,6 +58,7 @@ export function TaskDetailDialog({
   onLabelsChanged,
   onChecklistChanged,
   onCommentCountChanged,
+  onAttachmentCountChanged,
 }: {
   taskId: string | null
   open: boolean
@@ -68,6 +69,7 @@ export function TaskDetailDialog({
   onLabelsChanged: (taskId: string, labels: Label[]) => void
   onChecklistChanged: (taskId: string, completed: number, total: number) => void
   onCommentCountChanged: (taskId: string, count: number) => void
+  onAttachmentCountChanged: (taskId: string, count: number) => void
 }) {
   const [editState, editAction, editPending] = useActionState(editTask, undefined)
   const [, startTransition] = useTransition()
@@ -336,7 +338,13 @@ export function TaskDetailDialog({
 
         <div className="border-t border-border pt-3">
           <h3 className="mb-2 text-sm font-semibold">Attachments</h3>
-          <TaskAttachments taskId={taskDetail.id} onChanged={refetchActivity} />
+          <TaskAttachments
+            taskId={taskDetail.id}
+            onChanged={(count) => {
+              onAttachmentCountChanged(taskDetail.id, count)
+              refetchActivity()
+            }}
+          />
         </div>
 
         <div className="border-t border-border pt-3">

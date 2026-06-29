@@ -36,6 +36,7 @@ export function KanbanColumn({
     checklistCompleted: number
     checklistTotal: number
     commentCount: number
+    attachmentCount: number
   }[]
   assigneeEmailById: Map<string, string>
   onTaskMove: (taskId: string, newStatus: string) => void
@@ -87,6 +88,7 @@ export function KanbanColumn({
                 checklistCompleted={task.checklistCompleted}
                 checklistTotal={task.checklistTotal}
                 commentCount={task.commentCount}
+                attachmentCount={task.attachmentCount}
                 onMove={onTaskMove}
                 onOpen={onTaskOpen}
               />

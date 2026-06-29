@@ -80,6 +80,7 @@ type Task = {
   checklistCompleted: number
   checklistTotal: number
   commentCount: number
+  attachmentCount: number
 }
 type TasksByStatus = Record<string, Task[]>
 
@@ -269,6 +270,7 @@ export function KanbanBoard({
                   checklistCompleted: 0,
                   checklistTotal: 0,
                   commentCount: 0,
+                  attachmentCount: 0,
                 }
                 return {
                   ...previous,
@@ -338,6 +340,7 @@ export function KanbanBoard({
                     checklistCompleted: 0,
                     checklistTotal: 0,
                     commentCount: 0,
+                    attachmentCount: 0,
                   }
               stripped[row.status] = [...stripped[row.status], merged]
               return stripped
@@ -627,6 +630,7 @@ export function KanbanBoard({
       checklistCompleted: 0,
       checklistTotal: 0,
       commentCount: 0,
+      attachmentCount: 0,
     }
     setTasksByStatus((previous) => {
       // The Realtime echo of this same INSERT can arrive over the
@@ -707,6 +711,7 @@ export function KanbanBoard({
           checklistCompleted: 0,
           checklistTotal: 0,
           commentCount: 0,
+          attachmentCount: 0,
         },
       ],
     }))
@@ -744,6 +749,18 @@ export function KanbanBoard({
       for (const status of STATUSES) {
         next[status] = previous[status].map((task) =>
           task.id === taskId ? { ...task, commentCount: count } : task
+        )
+      }
+      return next
+    })
+  }
+
+  function handleAttachmentCountChanged(taskId: string, count: number) {
+    setTasksByStatus((previous) => {
+      const next: TasksByStatus = { ...previous }
+      for (const status of STATUSES) {
+        next[status] = previous[status].map((task) =>
+          task.id === taskId ? { ...task, attachmentCount: count } : task
         )
       }
       return next
@@ -857,6 +874,7 @@ export function KanbanBoard({
         onLabelsChanged={handleLabelsChanged}
         onChecklistChanged={handleChecklistChanged}
         onCommentCountChanged={handleCommentCountChanged}
+        onAttachmentCountChanged={handleAttachmentCountChanged}
       />
       <ToastStack toasts={toasts} />
     </div>

@@ -7,6 +7,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { TaskMoveControl } from "@/components/kanban/task-move-control"
 import { LABEL_COLORS, type Label } from "@/lib/labels"
 import { formatDueDate, isOverdue } from "@/lib/utils/dates"
+import { getTaskProgress } from "@/lib/utils/task-progress"
 
 const PRIORITY_STYLES: Record<string, string> = {
   low: "bg-secondary text-secondary-foreground",
@@ -62,6 +63,7 @@ function TaskCardBody({
   dragHandleProps,
   className,
 }: TaskCardProps & { dragHandleProps?: Record<string, unknown>; className: string }) {
+  const taskProgress = getTaskProgress({ status, progress, checklistCompleted, checklistTotal })
   return (
     <div data-testid="task-card" className={className}>
       <div className="flex items-center justify-between gap-2">
@@ -96,30 +98,18 @@ function TaskCardBody({
           ))}
         </div>
       )}
-      {checklistTotal > 0 ? (
+      {(checklistTotal > 0 || taskProgress > 0) && (
         <div className="flex items-center gap-1.5">
           <div className="h-1 flex-1 overflow-hidden rounded-full bg-secondary">
             <div
               className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${Math.round((checklistCompleted / checklistTotal) * 100)}%` }}
+              style={{ width: `${taskProgress}%` }}
             />
           </div>
           <span className="flex-shrink-0 text-xs text-muted-foreground">
-            {checklistCompleted}/{checklistTotal}
+            {checklistTotal > 0 ? `${checklistCompleted}/${checklistTotal}` : `${taskProgress}%`}
           </span>
         </div>
-      ) : (
-        progress > 0 && (
-          <div className="flex items-center gap-1.5">
-            <div className="h-1 flex-1 overflow-hidden rounded-full bg-secondary">
-              <div
-                className="h-full rounded-full bg-primary transition-all"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <span className="flex-shrink-0 text-xs text-muted-foreground">{progress}%</span>
-          </div>
-        )
       )}
       {(dueDate ||
         priority ||

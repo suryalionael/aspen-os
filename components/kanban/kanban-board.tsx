@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import dynamic from "next/dynamic"
-import { useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   DndContext,
   DragOverlay,
@@ -110,6 +110,7 @@ export function KanbanBoard({
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null)
   const searchParams = useSearchParams()
+  const router = useRouter()
 
   // Lets dashboard links like /[workspaceSlug]/[projectId]?task=<id> jump
   // straight to a task's detail dialog instead of landing on the board and
@@ -506,7 +507,17 @@ export function KanbanBoard({
         // Revert the optimistic change and surface the failure.
         setTasksByStatus(previousState)
         setError(result.error)
+        return
       }
+      // moveTask deliberately skips revalidatePath (it's called directly
+      // from drag-end/the keyboard move control, not a <form> action —
+      // see its own comment), which predates ProjectHeader's aggregate
+      // done-count/progress badge. Without this, moving a task to/from
+      // Done leaves that badge showing stale data until a full reload
+      // (found verifying Sprint 4 Phase 0 Bug 1) — this board's own
+      // optimistic state is already correct, this is only for that
+      // sibling, server-rendered component.
+      router.refresh()
     })
   }
 

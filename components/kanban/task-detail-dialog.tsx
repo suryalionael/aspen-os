@@ -78,6 +78,7 @@ export function TaskDetailDialog({
   const [taskDetail, setTaskDetail] = useState<TaskDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [descriptionDraft, setDescriptionDraft] = useState("")
+  const [progressDraft, setProgressDraft] = useState(0)
   const [activity, setActivity] = useState<TaskActivityEntry[]>([])
   const [activityLoading, setActivityLoading] = useState(false)
   const [members, setMembers] = useState<ProjectMember[]>([])
@@ -112,6 +113,7 @@ export function TaskDetailDialog({
       if ("success" in result) {
         setTaskDetail(result.task)
         setDescriptionDraft(result.task.description ?? "")
+        setProgressDraft(result.task.progress)
       }
       setDetailLoading(false)
     })
@@ -324,6 +326,25 @@ export function TaskDetailDialog({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="task-progress" className="text-sm font-medium">
+              Progress {progressDraft}%
+            </label>
+            <input
+              id="task-progress"
+              name="progress"
+              type="range"
+              min={0}
+              max={100}
+              value={progressDraft}
+              onChange={(event) => setProgressDraft(Number(event.target.value))}
+            />
+            <p className="text-xs text-muted-foreground">
+              Used when this task has no checklist — otherwise progress follows
+              checklist completion.
+            </p>
           </div>
 
           {editState && "error" in editState && (

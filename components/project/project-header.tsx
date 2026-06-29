@@ -35,6 +35,7 @@ export function ProjectHeader({
   members,
   totalTasks,
   completedTasks,
+  averageProgress,
 }: {
   projectId: string
   workspaceSlug: string
@@ -47,13 +48,13 @@ export function ProjectHeader({
   members: { user_id: string; email: string }[]
   totalTasks: number
   completedTasks: number
+  averageProgress: number
 }) {
   const [name, setName] = useState(initialName)
   const [description, setDescription] = useState(initialDescription)
   const [dueDate, setDueDate] = useState(initialDueDate)
   const [status, setStatus] = useState(initialStatus)
 
-  const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
   const visibleMembers = members.slice(0, 5)
   const overflowCount = members.length - visibleMembers.length
 
@@ -123,11 +124,11 @@ export function ProjectHeader({
             <div className="h-1.5 w-28 overflow-hidden rounded-full bg-secondary">
               <div
                 className="h-full rounded-full bg-primary transition-all"
-                style={{ width: `${progressPercent}%` }}
+                style={{ width: `${averageProgress}%` }}
               />
             </div>
             <span>
-              {completedTasks}/{totalTasks} done ({progressPercent}%)
+              {completedTasks}/{totalTasks} done ({averageProgress}%)
             </span>
           </div>
         )}

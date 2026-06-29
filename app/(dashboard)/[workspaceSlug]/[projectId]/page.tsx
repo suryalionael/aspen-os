@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { KanbanBoard } from "@/components/kanban/kanban-board"
 import { ProjectHeader } from "@/components/project/project-header"
+import { getAverageProgress } from "@/lib/utils/task-progress"
 
 export default async function ProjectPage({
   params,
@@ -48,7 +49,7 @@ export default async function ProjectPage({
   const { data: tasks } = await supabase
     .from("tasks")
     .select(
-      "id, title, status, description, due_date, priority, assignee_id, created_at, task_labels(labels(id, name, color)), checklist_items(completed), comments(id), task_attachments(id)"
+      "id, title, status, description, due_date, priority, assignee_id, created_at, progress, task_labels(labels(id, name, color)), checklist_items(completed), comments(id), task_attachments(id)"
     )
     .eq("project_id", project.id)
     .is("archived_at", null)
@@ -71,9 +72,11 @@ export default async function ProjectPage({
     checklistCompleted: task.checklist_items.filter((item) => item.completed).length,
     commentCount: task.comments.length,
     attachmentCount: task.task_attachments.length,
+    progress: task.progress,
   }))
 
   const completedCount = tasksWithLabels.filter((task) => task.status === "done").length
+  const averageProgress = getAverageProgress(tasksWithLabels)
 
   return (
     <div className="flex flex-1 flex-col">
@@ -89,6 +92,7 @@ export default async function ProjectPage({
         members={members}
         totalTasks={tasksWithLabels.length}
         completedTasks={completedCount}
+        averageProgress={averageProgress}
       />
       <KanbanBoard projectId={project.id} initialTasks={tasksWithLabels} />
     </div>

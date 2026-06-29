@@ -364,7 +364,7 @@ test("comments can be added, edited, and deleted", async ({ page }) => {
   const newComment = page.getByLabel("New comment")
   await newComment.fill("First comment")
   const addPersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
-  await page.getByRole("button", { name: "Comment" }).click()
+  await page.getByRole("button", { name: "Comment", exact: true }).click()
   await addPersisted
   await expect(
     page.getByTestId("comment-item").getByText("First comment")

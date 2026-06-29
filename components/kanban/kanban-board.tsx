@@ -85,6 +85,7 @@ type Task = {
   commentCount: number
   attachmentCount: number
   progress: number
+  assigneeIds: string[]
 }
 type TasksByStatus = Record<string, Task[]>
 
@@ -278,6 +279,7 @@ export function KanbanBoard({
                   commentCount: 0,
                   attachmentCount: 0,
                   progress: 0,
+                  assigneeIds: [],
                 }
                 return {
                   ...previous,
@@ -349,6 +351,7 @@ export function KanbanBoard({
                     commentCount: 0,
                     attachmentCount: 0,
                     progress: 0,
+                    assigneeIds: [],
                   }
               stripped[row.status] = [...stripped[row.status], merged]
               return stripped
@@ -660,6 +663,7 @@ export function KanbanBoard({
       commentCount: 0,
       attachmentCount: 0,
       progress: 0,
+      assigneeIds: [],
     }
     setTasksByStatus((previous) => {
       // The Realtime echo of this same INSERT can arrive over the
@@ -743,6 +747,7 @@ export function KanbanBoard({
           commentCount: 0,
           attachmentCount: 0,
           progress: 0,
+          assigneeIds: [],
         },
       ],
     }))
@@ -754,6 +759,20 @@ export function KanbanBoard({
       for (const status of STATUSES) {
         next[status] = previous[status].map((task) =>
           task.id === taskId ? { ...task, labels } : task
+        )
+      }
+      return next
+    })
+  }
+
+  function handleAssigneesChanged(taskId: string, assignees: { user_id: string }[]) {
+    setTasksByStatus((previous) => {
+      const next: TasksByStatus = { ...previous }
+      for (const status of STATUSES) {
+        next[status] = previous[status].map((task) =>
+          task.id === taskId
+            ? { ...task, assigneeIds: assignees.map((assignee) => assignee.user_id) }
+            : task
         )
       }
       return next
@@ -903,11 +922,9 @@ export function KanbanBoard({
                     status={draggingTask.status}
                     dueDate={draggingTask.due_date}
                     priority={draggingTask.priority}
-                    assigneeEmail={
-                      draggingTask.assignee_id
-                        ? assigneeEmailById.get(draggingTask.assignee_id)
-                        : null
-                    }
+                    assigneeEmails={draggingTask.assigneeIds
+                      .map((userId) => assigneeEmailById.get(userId))
+                      .filter((email): email is string => Boolean(email))}
                     labels={draggingTask.labels}
                     checklistCompleted={draggingTask.checklistCompleted}
                     checklistTotal={draggingTask.checklistTotal}
@@ -932,6 +949,7 @@ export function KanbanBoard({
         onTaskArchiveChange={handleTaskArchiveChange}
         onTaskDeleted={removeTaskFromState}
         onLabelsChanged={handleLabelsChanged}
+        onAssigneesChanged={handleAssigneesChanged}
         onChecklistChanged={handleChecklistChanged}
         onCommentCountChanged={handleCommentCountChanged}
         onAttachmentCountChanged={handleAttachmentCountChanged}

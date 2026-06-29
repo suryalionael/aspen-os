@@ -270,7 +270,6 @@ export async function editTask(
   const description = String(formData.get("description") ?? "").trim()
   const dueDate = String(formData.get("dueDate") ?? "").trim()
   const priority = String(formData.get("priority") ?? "").trim()
-  const assigneeId = String(formData.get("assigneeId") ?? "").trim()
   const progressRaw = Number(formData.get("progress") ?? 0)
   const progress = Number.isFinite(progressRaw)
     ? Math.min(100, Math.max(0, Math.round(progressRaw)))
@@ -297,7 +296,7 @@ export async function editTask(
 
   const { data: previousTask } = await supabase
     .from("tasks")
-    .select("title, description, due_date, priority, assignee_id, project_id")
+    .select("title, description, due_date, priority, project_id")
     .eq("id", taskId)
     .maybeSingle()
 
@@ -308,7 +307,6 @@ export async function editTask(
       description: description || null,
       due_date: dueDate || null,
       priority: priority || null,
-      assignee_id: assigneeId || null,
       progress,
     })
     .eq("id", taskId)
@@ -329,11 +327,6 @@ export async function editTask(
       },
       { field: "due_date", from: previousTask.due_date, to: updatedTask.due_date },
       { field: "priority", from: previousTask.priority, to: updatedTask.priority },
-      {
-        field: "assignee_id",
-        from: previousTask.assignee_id,
-        to: updatedTask.assignee_id,
-      },
     ].filter((change) => change.from !== change.to)
 
     for (const change of changes) {
@@ -353,28 +346,8 @@ export async function editTask(
       }
     }
 
-    // Notify the new assignee — not on every edit, only when assignee_id
-    // actually changed to a new, non-null value (already guaranteed by
-    // the `changes` filter above finding it in the diff).
-    const assigneeChange = changes.find((change) => change.field === "assignee_id")
-    if (assigneeChange && updatedTask.assignee_id) {
-      const { data: project } = await supabase
-        .from("projects")
-        .select("workspace_id")
-        .eq("id", previousTask.project_id)
-        .maybeSingle()
-      if (project) {
-        await createNotification(supabase, {
-          userId: updatedTask.assignee_id,
-          actorId: user.id,
-          workspaceId: project.workspace_id,
-          projectId: previousTask.project_id,
-          taskId,
-          type: "assigned",
-          message: `You were assigned to "${updatedTask.title}"`,
-        })
-      }
-    }
+    // Assignment notifications now fire from assignUserToTask
+    // (lib/actions/assignees.ts) — assignee_id is no longer edited here.
   }
 
   revalidatePath("/", "layout")

@@ -31,7 +31,7 @@ export function KanbanColumn({
     title: string
     due_date: string | null
     priority: string | null
-    assignee_id: string | null
+    assigneeIds: string[]
     labels: Label[]
     checklistCompleted: number
     checklistTotal: number
@@ -84,7 +84,9 @@ export function KanbanColumn({
                 status={status}
                 dueDate={task.due_date}
                 priority={task.priority}
-                assigneeEmail={task.assignee_id ? assigneeEmailById.get(task.assignee_id) : null}
+                assigneeEmails={task.assigneeIds
+                  .map((userId) => assigneeEmailById.get(userId))
+                  .filter((email): email is string => Boolean(email))}
                 labels={task.labels}
                 checklistCompleted={task.checklistCompleted}
                 checklistTotal={task.checklistTotal}

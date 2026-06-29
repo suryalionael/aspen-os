@@ -49,7 +49,7 @@ export default async function ProjectPage({
   const { data: tasks } = await supabase
     .from("tasks")
     .select(
-      "id, title, status, description, due_date, priority, assignee_id, created_at, progress, task_labels(labels(id, name, color)), checklist_items(completed), comments(id), task_attachments(id)"
+      "id, title, status, description, due_date, priority, assignee_id, created_at, progress, task_labels(labels(id, name, color)), checklist_items(completed), comments(id), task_attachments(id), task_assignees(user_id)"
     )
     .eq("project_id", project.id)
     .is("archived_at", null)
@@ -73,6 +73,7 @@ export default async function ProjectPage({
     commentCount: task.comments.length,
     attachmentCount: task.task_attachments.length,
     progress: task.progress,
+    assigneeIds: task.task_assignees.map((row) => row.user_id),
   }))
 
   const completedCount = tasksWithLabels.filter((task) => task.status === "done").length

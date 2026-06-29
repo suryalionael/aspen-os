@@ -70,11 +70,10 @@ test("notifications fire for assignment, comments, checklist completion, and due
   await ownerPage.getByTestId("task-card").getByText("Shared task").click()
   await expect(ownerPage.getByRole("dialog", { name: "Task details" })).toBeVisible()
   await waitForDialogSettled(ownerPage)
-  await ownerPage.getByLabel("Assignee").selectOption({ label: memberEmail })
-  let savePersisted = ownerPage.waitForResponse((resp) => resp.request().method() === "POST")
-  await ownerPage.getByRole("button", { name: "Save" }).click()
-  await savePersisted
-  await expect(ownerPage.getByText("Assignee changed", { exact: false })).toBeVisible()
+  await ownerPage.getByRole("heading", { name: "Assignees" }).waitFor({ state: "visible" })
+  await ownerPage.getByRole("button", { name: memberEmail, exact: false }).click()
+  await expect(ownerPage.getByText("Assigned to", { exact: false })).toBeVisible()
+  let savePersisted: ReturnType<Page["waitForResponse"]>
   await ownerPage.keyboard.press("Escape")
 
   await memberPage.goto(projectUrl)

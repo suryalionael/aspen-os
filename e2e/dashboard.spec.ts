@@ -43,10 +43,12 @@ test("dashboard surfaces assigned/due-today/upcoming tasks, favorite projects, a
 
   const today = new Date().toISOString().slice(0, 10)
   await page.getByLabel("Due date").fill(today)
-  await page.getByLabel("Assignee").selectOption({ label: email })
   const editPersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Save" }).click()
   await editPersisted
+  await page.getByRole("heading", { name: "Assignees" }).waitFor({ state: "visible" })
+  await page.getByRole("button", { name: email, exact: false }).click()
+  await expect(page.getByText("Assigned to", { exact: false })).toBeVisible()
   await page.keyboard.press("Escape")
 
   // --- Favorite the project from the sidebar ---

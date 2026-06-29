@@ -48,6 +48,8 @@ const ACTIVITY_LABELS: Record<string, (metadata: Record<string, unknown> | null)
   attachment_added: (metadata) => `Attachment "${String(metadata?.file_name ?? "")}" added`,
   attachment_removed: (metadata) =>
     `Attachment "${String(metadata?.file_name ?? "")}" removed`,
+  assignee_added: (metadata) => `Assigned to ${String(metadata?.email ?? "someone")}`,
+  assignee_removed: (metadata) => `Unassigned from ${String(metadata?.email ?? "someone")}`,
 }
 
 export function describeActivity(

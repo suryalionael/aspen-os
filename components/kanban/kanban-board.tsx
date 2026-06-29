@@ -5,10 +5,12 @@ import dynamic from "next/dynamic"
 import { useSearchParams } from "next/navigation"
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core"
 import { arrayMove } from "@dnd-kit/sortable"
 
@@ -26,6 +28,7 @@ import { useToasts } from "@/lib/hooks/use-toasts"
 import { ArchivedTasksDialog } from "@/components/kanban/archived-tasks-dialog"
 import { BoardToolbar, type SortMode } from "@/components/kanban/board-toolbar"
 import { KanbanColumn } from "@/components/kanban/kanban-column"
+import { TaskCardOverlay } from "@/components/kanban/task-card"
 import { TaskDetailDialog } from "@/components/kanban/task-detail-dialog"
 import { TaskListView } from "@/components/kanban/task-list-view"
 import { TaskTableView } from "@/components/kanban/task-table-view"
@@ -104,6 +107,7 @@ export function KanbanBoard({
   )
   const [error, setError] = useState<string | null>(null)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null)
   const searchParams = useSearchParams()
 
   // Lets dashboard links like /[workspaceSlug]/[projectId]?task=<id> jump
@@ -386,6 +390,11 @@ export function KanbanBoard({
     [tasksByStatus]
   )
 
+  const draggingTask = useMemo(
+    () => (draggingTaskId ? allTasks.find((task) => task.id === draggingTaskId) ?? null : null),
+    [draggingTaskId, allTasks]
+  )
+
   const todayTasks = useMemo(() => {
     const todayKey = toDateKey(new Date())
     return allTasks.filter((task) => task.due_date === todayKey)
@@ -523,7 +532,12 @@ export function KanbanBoard({
     })
   }
 
+  function handleDragStart(event: DragStartEvent) {
+    setDraggingTaskId(String(event.active.id))
+  }
+
   function handleDragEnd(event: DragEndEvent) {
+    setDraggingTaskId(null)
     // Reordering a filtered/sorted view has no safe, unambiguous mapping
     // back onto the real fractional position data, so drags are inert
     // while the view is modified. This is gated here rather than by
@@ -843,7 +857,12 @@ export function KanbanBoard({
           )}
           {viewMode === "activity" && <ProjectActivityFeed projectId={projectId} />}
           {viewMode === "board" && (
-            <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+            <DndContext
+              sensors={sensors}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragCancel={() => setDraggingTaskId(null)}
+            >
               <div className="flex flex-1 gap-5 overflow-x-auto pb-2">
                 {STATUSES.map((status) => (
                   <KanbanColumn
@@ -859,6 +878,29 @@ export function KanbanBoard({
                   />
                 ))}
               </div>
+              <DragOverlay>
+                {draggingTask && (
+                  <TaskCardOverlay
+                    id={draggingTask.id}
+                    title={draggingTask.title}
+                    status={draggingTask.status}
+                    dueDate={draggingTask.due_date}
+                    priority={draggingTask.priority}
+                    assigneeEmail={
+                      draggingTask.assignee_id
+                        ? assigneeEmailById.get(draggingTask.assignee_id)
+                        : null
+                    }
+                    labels={draggingTask.labels}
+                    checklistCompleted={draggingTask.checklistCompleted}
+                    checklistTotal={draggingTask.checklistTotal}
+                    commentCount={draggingTask.commentCount}
+                    attachmentCount={draggingTask.attachmentCount}
+                    onMove={() => {}}
+                    onOpen={() => {}}
+                  />
+                )}
+              </DragOverlay>
             </DndContext>
           )}
         </div>

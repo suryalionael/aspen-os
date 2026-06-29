@@ -22,29 +22,7 @@ const PRIORITY_LABELS: Record<string, string> = {
   urgent: "Urgent",
 }
 
-// Memoized — a Kanban board re-renders all its cards on any task mutation
-// (tasksByStatus is one object covering every column), so without this
-// every card in every column would re-render whenever any single task
-// changed. Takes `id` and dispatches through it (onMove(id, status),
-// onOpen(id)) rather than receiving pre-bound per-card closures, so the
-// parent can pass the same stable function reference to every card
-// instead of a fresh closure each render — required for memo's shallow
-// prop comparison to actually skip anything.
-export const TaskCard = memo(function TaskCard({
-  id,
-  title,
-  status,
-  dueDate,
-  priority,
-  assigneeEmail,
-  labels,
-  checklistCompleted,
-  checklistTotal,
-  commentCount,
-  attachmentCount,
-  onMove,
-  onOpen,
-}: {
+type TaskCardProps = {
   id: string
   title: string
   status: string
@@ -58,23 +36,32 @@ export const TaskCard = memo(function TaskCard({
   attachmentCount: number
   onMove: (id: string, newStatus: string) => void
   onOpen: (id: string) => void
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id })
+}
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-  }
-
+// The actual card markup, shared by the sortable in-column card and its
+// DragOverlay clone — dnd-kit's recommended pattern is a separate,
+// non-sortable copy for the overlay (registering useSortable twice under
+// the same id would be wrong), so the drag-specific wiring (ref, style,
+// attributes/listeners) is passed in rather than computed here.
+function TaskCardBody({
+  id,
+  title,
+  status,
+  dueDate,
+  priority,
+  assigneeEmail,
+  labels,
+  checklistCompleted,
+  checklistTotal,
+  commentCount,
+  attachmentCount,
+  onMove,
+  onOpen,
+  dragHandleProps,
+  className,
+}: TaskCardProps & { dragHandleProps?: Record<string, unknown>; className: string }) {
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      data-testid="task-card"
-      className="flex flex-col gap-2 rounded-xl border border-border/60 bg-card p-3.5 text-sm shadow-sm transition-shadow hover:shadow-md"
-    >
+    <div data-testid="task-card" className={className}>
       <div className="flex items-center justify-between gap-2">
         {/* The drag handle is scoped to the title only, so it never
             competes with the keyboard "move to" control's own
@@ -84,8 +71,7 @@ export const TaskCard = memo(function TaskCard({
             starts — so this same span can open the detail dialog without a
             separate affordance. */}
         <span
-          {...attributes}
-          {...listeners}
+          {...dragHandleProps}
           onClick={() => onOpen(id)}
           className="flex-1 cursor-grab select-none"
         >
@@ -161,4 +147,56 @@ export const TaskCard = memo(function TaskCard({
       )}
     </div>
   )
+}
+
+const CARD_CLASS =
+  "flex flex-col gap-2 rounded-xl border border-border/60 bg-card p-3.5 text-sm shadow-sm transition-shadow hover:shadow-md"
+
+// Memoized — a Kanban board re-renders all its cards on any task mutation
+// (tasksByStatus is one object covering every column), so without this
+// every card in every column would re-render whenever any single task
+// changed. Takes `id` and dispatches through it (onMove(id, status),
+// onOpen(id)) rather than receiving pre-bound per-card closures, so the
+// parent can pass the same stable function reference to every card
+// instead of a fresh closure each render — required for memo's shallow
+// prop comparison to actually skip anything.
+export const TaskCard = memo(function TaskCard(props: TaskCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: props.id,
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  // While dragging, the original slot becomes a dashed placeholder
+  // (matching Linear/Notion) instead of a faded copy of the card — the
+  // actual card now follows the cursor via DragOverlay in KanbanBoard.
+  if (isDragging) {
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        className="min-h-[3.5rem] rounded-xl border-2 border-dashed border-border bg-secondary/30"
+      />
+    )
+  }
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <TaskCardBody {...props} dragHandleProps={{ ...attributes, ...listeners }} className={CARD_CLASS} />
+    </div>
+  )
 })
+
+// The floating clone rendered inside DragOverlay — no sortable wiring, a
+// slightly elevated/rotated style to read clearly as "currently in hand."
+export function TaskCardOverlay(props: TaskCardProps) {
+  return (
+    <TaskCardBody
+      {...props}
+      className={`${CARD_CLASS} rotate-2 cursor-grabbing shadow-xl`}
+    />
+  )
+}

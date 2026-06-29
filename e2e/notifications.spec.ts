@@ -149,8 +149,8 @@ test("notifications fire for assignment, comments, checklist completion, and due
   savePersisted = memberPage.waitForResponse((resp) => resp.request().method() === "POST")
   await memberPage.getByRole("button", { name: "Save" }).click()
   await savePersisted
-  await expect(memberPage.getByText("Due date changed", { exact: false })).toBeVisible()
-  await memberPage.keyboard.press("Escape")
+  // Save closes the dialog automatically (Priority 10).
+  await expect(memberPage.getByRole("dialog", { name: "Task details" })).toBeHidden()
 
   await memberPage.reload()
   await memberPage.getByRole("button", { name: "Notifications" }).click()

@@ -20,6 +20,7 @@ import {
 } from "@/lib/actions/tasks"
 import { getProjectMembers } from "@/lib/actions/projects"
 import type { Label } from "@/lib/labels"
+import { toDateKey } from "@/lib/utils/dates"
 import { createClient } from "@/lib/supabase/client"
 import { useToasts } from "@/lib/hooks/use-toasts"
 import { ArchivedTasksDialog } from "@/components/kanban/archived-tasks-dialog"
@@ -29,6 +30,7 @@ import { TaskDetailDialog } from "@/components/kanban/task-detail-dialog"
 import { TaskListView } from "@/components/kanban/task-list-view"
 import { TaskTableView } from "@/components/kanban/task-table-view"
 import { ProjectActivityFeed } from "@/components/kanban/project-activity-feed"
+import { ProjectCompletionSidebar } from "@/components/kanban/project-completion-sidebar"
 import { ToastStack } from "@/components/ui/toast-stack"
 
 const VIEW_TABS = [
@@ -40,12 +42,6 @@ const VIEW_TABS = [
   { value: "activity", label: "Activity" },
 ] as const
 type ViewMode = (typeof VIEW_TABS)[number]["value"]
-
-function toDateKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-    date.getDate()
-  ).padStart(2, "0")}`
-}
 
 // Loaded only when the user actually toggles to Calendar view — most
 // sessions only ever use Kanban, so this (and its @tanstack/react-virtual
@@ -802,50 +798,55 @@ export function KanbanBoard({
           {error}
         </p>
       )}
-      {viewMode === "calendar" && (
-        <CalendarView
-          tasks={allTasks}
-          onDueDateChange={handleCalendarDueDateChange}
-          onTaskOpen={setOpenTaskId}
-        />
-      )}
-      {viewMode === "today" && (
-        <TaskListView tasks={todayTasks} emptyMessage="Nothing due today." onTaskOpen={setOpenTaskId} />
-      )}
-      {viewMode === "week" && (
-        <TaskListView
-          tasks={weekTasks}
-          emptyMessage="Nothing due in the next 7 days."
-          onTaskOpen={setOpenTaskId}
-        />
-      )}
-      {viewMode === "table" && (
-        <TaskTableView
-          tasks={allTasks}
-          assigneeEmailById={assigneeEmailById}
-          onTaskOpen={setOpenTaskId}
-        />
-      )}
-      {viewMode === "activity" && <ProjectActivityFeed projectId={projectId} />}
-      {viewMode === "board" && (
-        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-          <div className="flex flex-1 gap-5 overflow-x-auto pb-2">
-            {STATUSES.map((status) => (
-              <KanbanColumn
-                key={status}
-                status={status}
-                projectId={projectId}
-                tasks={visibleTasksByStatus[status]}
-                assigneeEmailById={assigneeEmailById}
-                onTaskMove={handleKeyboardMove}
-                onTaskCreated={handleTaskCreated}
-                onTaskOpen={setOpenTaskId}
-                isFiltered={isFiltered}
-              />
-            ))}
-          </div>
-        </DndContext>
-      )}
+      <div className="flex flex-1 gap-6 overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          {viewMode === "calendar" && (
+            <CalendarView
+              tasks={allTasks}
+              onDueDateChange={handleCalendarDueDateChange}
+              onTaskOpen={setOpenTaskId}
+            />
+          )}
+          {viewMode === "today" && (
+            <TaskListView tasks={todayTasks} emptyMessage="Nothing due today." onTaskOpen={setOpenTaskId} />
+          )}
+          {viewMode === "week" && (
+            <TaskListView
+              tasks={weekTasks}
+              emptyMessage="Nothing due in the next 7 days."
+              onTaskOpen={setOpenTaskId}
+            />
+          )}
+          {viewMode === "table" && (
+            <TaskTableView
+              tasks={allTasks}
+              assigneeEmailById={assigneeEmailById}
+              onTaskOpen={setOpenTaskId}
+            />
+          )}
+          {viewMode === "activity" && <ProjectActivityFeed projectId={projectId} />}
+          {viewMode === "board" && (
+            <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+              <div className="flex flex-1 gap-5 overflow-x-auto pb-2">
+                {STATUSES.map((status) => (
+                  <KanbanColumn
+                    key={status}
+                    status={status}
+                    projectId={projectId}
+                    tasks={visibleTasksByStatus[status]}
+                    assigneeEmailById={assigneeEmailById}
+                    onTaskMove={handleKeyboardMove}
+                    onTaskCreated={handleTaskCreated}
+                    onTaskOpen={setOpenTaskId}
+                    isFiltered={isFiltered}
+                  />
+                ))}
+              </div>
+            </DndContext>
+          )}
+        </div>
+        <ProjectCompletionSidebar tasks={allTasks} onTaskOpen={setOpenTaskId} />
+      </div>
       <TaskDetailDialog
         taskId={openTaskId}
         open={openTaskId !== null}

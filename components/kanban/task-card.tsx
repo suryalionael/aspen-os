@@ -6,6 +6,7 @@ import { CSS } from "@dnd-kit/utilities"
 
 import { TaskMoveControl } from "@/components/kanban/task-move-control"
 import { LABEL_COLORS, type Label } from "@/lib/labels"
+import { formatDueDate, isOverdue } from "@/lib/utils/dates"
 
 const PRIORITY_STYLES: Record<string, string> = {
   low: "bg-secondary text-secondary-foreground",
@@ -19,29 +20,6 @@ const PRIORITY_LABELS: Record<string, string> = {
   medium: "Medium",
   high: "High",
   urgent: "Urgent",
-}
-
-// Postgres `date` columns come back as a bare "YYYY-MM-DD" string with no
-// time component. new Date("YYYY-MM-DD") parses it as UTC midnight, which
-// toLocaleDateString() then converts to the viewer's local timezone — in
-// any negative-UTC-offset timezone that silently shifts the displayed date
-// back by one day. Building the Date from explicit local Y/M/D components
-// avoids that UTC round-trip entirely.
-function formatDueDate(dateStr: string): string {
-  const [year, month, day] = dateStr.split("-").map(Number)
-  return new Date(year, month - 1, day).toLocaleDateString()
-}
-
-// Same local-Y/M/D construction as formatDueDate, for the same reason —
-// comparing against "today" must use the viewer's local calendar date,
-// not a UTC-shifted one.
-function isOverdue(dateStr: string, status: string): boolean {
-  if (status === "done") return false
-  const [year, month, day] = dateStr.split("-").map(Number)
-  const due = new Date(year, month - 1, day)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return due < today
 }
 
 // Memoized — a Kanban board re-renders all its cards on any task mutation

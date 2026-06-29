@@ -6,7 +6,7 @@ import type { Label } from "@/lib/labels"
 export type SortMode = "manual" | "priority" | "due_date" | "newest" | "oldest" | "assignee"
 
 const SELECT_CLASS =
-  "h-9 rounded-md border border-input bg-transparent px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+  "h-9 rounded-lg border border-input bg-transparent px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
 
 export function BoardToolbar({
   searchQuery,

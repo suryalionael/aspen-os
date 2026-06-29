@@ -719,15 +719,17 @@ export function KanbanBoard({
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-3 p-6">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-1 rounded-md border border-input p-0.5">
+    <div className="flex flex-1 flex-col gap-4 p-6 md:p-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-1 rounded-lg bg-secondary/60 p-1">
           <button
             type="button"
             aria-pressed={viewMode === "kanban"}
             onClick={() => setViewMode("kanban")}
-            className={`rounded px-2 py-1 text-sm ${
-              viewMode === "kanban" ? "bg-secondary" : "hover:bg-secondary/50"
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              viewMode === "kanban"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
             Kanban
@@ -736,8 +738,10 @@ export function KanbanBoard({
             type="button"
             aria-pressed={viewMode === "calendar"}
             onClick={() => setViewMode("calendar")}
-            className={`rounded px-2 py-1 text-sm ${
-              viewMode === "calendar" ? "bg-secondary" : "hover:bg-secondary/50"
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              viewMode === "calendar"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
             Calendar
@@ -779,7 +783,7 @@ export function KanbanBoard({
         />
       ) : (
         <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-          <div className="flex flex-1 gap-4 overflow-x-auto">
+          <div className="flex flex-1 gap-5 overflow-x-auto pb-2">
             {STATUSES.map((status) => (
               <KanbanColumn
                 key={status}

@@ -93,7 +93,7 @@ export const TaskCard = memo(function TaskCard({
       ref={setNodeRef}
       style={style}
       data-testid="task-card"
-      className="flex flex-col gap-2 rounded-md border border-border bg-card p-3 text-sm shadow-sm"
+      className="flex flex-col gap-2 rounded-xl border border-border/60 bg-card p-3.5 text-sm shadow-sm transition-shadow hover:shadow-md"
     >
       <div className="flex items-center justify-between gap-2">
         {/* The drag handle is scoped to the title only, so it never
@@ -118,7 +118,7 @@ export const TaskCard = memo(function TaskCard({
           {labels.map((label) => (
             <span
               key={label.id}
-              className={`rounded px-1.5 py-0.5 text-xs font-medium ${
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                 LABEL_COLORS.find((option) => option.value === label.color)
                   ?.className ?? "bg-secondary text-secondary-foreground"
               }`}
@@ -140,7 +140,7 @@ export const TaskCard = memo(function TaskCard({
           )}
           {priority && (
             <span
-              className={`rounded px-1.5 py-0.5 text-xs font-medium ${
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                 PRIORITY_STYLES[priority] ?? "bg-secondary text-secondary-foreground"
               }`}
             >

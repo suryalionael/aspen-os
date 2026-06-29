@@ -44,6 +44,8 @@ const ACTION_LABELS: Record<string, string> = {
   "workspace.updated": "Workspace updated",
   "workspace.archived": "Workspace archived",
   "workspace.unarchived": "Workspace restored",
+  "meeting.created": "Meeting created",
+  "meeting.deleted": "Meeting deleted",
 }
 
 // The full, static set — not derived from whatever happens to be on the

@@ -154,6 +154,86 @@ export type Database = {
           },
         ]
       }
+      meetings: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          end_time: string | null
+          id: string
+          project_id: string | null
+          start_time: string
+          title: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_time?: string | null
+          id?: string
+          project_id?: string | null
+          start_time: string
+          title: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_time?: string | null
+          id?: string
+          project_id?: string | null
+          start_time?: string
+          title?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meetings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meetings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meeting_attendees: {
+        Row: {
+          created_at: string
+          meeting_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          meeting_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          meeting_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_attendees_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string
@@ -652,6 +732,10 @@ export type Database = {
       }
       is_workspace_member_for_project: {
         Args: { p_project_id: string }
+        Returns: boolean
+      }
+      is_workspace_member_for_meeting: {
+        Args: { p_meeting_id: string }
         Returns: boolean
       }
       is_workspace_member_for_task: {

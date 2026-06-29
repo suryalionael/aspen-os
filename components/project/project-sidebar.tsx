@@ -106,6 +106,13 @@ export function ProjectSidebar({
             <AuditLogDialog workspaceId={workspaceId} />
             <WorkspaceMembersDialog workspaceId={workspaceId} currentUserRole={currentUserRole} />
           </div>
+          <Link
+            href={`/${workspaceSlug}/calendar`}
+            onClick={closeDrawer}
+            className="rounded-md px-2 py-1.5 text-sm hover:bg-secondary"
+          >
+            Calendar
+          </Link>
         </div>
 
         {isAdminOrOwner && (

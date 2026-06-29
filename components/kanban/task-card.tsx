@@ -41,6 +41,7 @@ export const TaskCard = memo(function TaskCard({
   checklistCompleted,
   checklistTotal,
   commentCount,
+  attachmentCount,
   onMove,
   onOpen,
 }: {
@@ -54,6 +55,7 @@ export const TaskCard = memo(function TaskCard({
   checklistCompleted: number
   checklistTotal: number
   commentCount: number
+  attachmentCount: number
   onMove: (id: string, newStatus: string) => void
   onOpen: (id: string) => void
 }) {
@@ -106,15 +108,30 @@ export const TaskCard = memo(function TaskCard({
           ))}
         </div>
       )}
-      {(dueDate || priority || assigneeEmail || checklistTotal > 0 || commentCount > 0) && (
+      {checklistTotal > 0 && (
+        <div className="flex items-center gap-1.5">
+          <div className="h-1 flex-1 overflow-hidden rounded-full bg-secondary">
+            <div
+              className="h-full rounded-full bg-primary transition-all"
+              style={{ width: `${Math.round((checklistCompleted / checklistTotal) * 100)}%` }}
+            />
+          </div>
+          <span className="flex-shrink-0 text-xs text-muted-foreground">
+            {checklistCompleted}/{checklistTotal}
+          </span>
+        </div>
+      )}
+      {(dueDate ||
+        priority ||
+        assigneeEmail ||
+        commentCount > 0 ||
+        attachmentCount > 0) && (
         <div className="flex flex-wrap items-center gap-2">
-          {checklistTotal > 0 && (
-            <span className="text-xs text-muted-foreground">
-              ☑ {checklistCompleted}/{checklistTotal}
-            </span>
-          )}
           {commentCount > 0 && (
             <span className="text-xs text-muted-foreground">💬 {commentCount}</span>
+          )}
+          {attachmentCount > 0 && (
+            <span className="text-xs text-muted-foreground">📎 {attachmentCount}</span>
           )}
           {priority && (
             <span

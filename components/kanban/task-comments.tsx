@@ -35,6 +35,15 @@ export function TaskComments({
   const [, startTransition] = useTransition()
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const recentlyTouched = useRef<Map<string, number>>(new Map())
+  // Lets the Realtime handler below read the latest comments without
+  // calling onChanged from inside a setState updater — doing that
+  // triggered React's "Cannot update a component while rendering a
+  // different component" warning, since onChanged ultimately updates
+  // KanbanBoard's state, not just this component's own.
+  const commentsRef = useRef<Comment[]>([])
+  useEffect(() => {
+    commentsRef.current = comments
+  }, [comments])
 
   function markTouched(commentId: string) {
     recentlyTouched.current.set(commentId, Date.now())
@@ -101,12 +110,10 @@ export function TaskComments({
             if (payload.eventType === "INSERT") {
               const row = payload.new as Comment
               if (wasRecentlyTouched(row.id)) return
-              setComments((previous) => {
-                if (previous.some((comment) => comment.id === row.id)) return previous
-                const next = [...previous, row]
-                onChanged(next.length)
-                return next
-              })
+              if (commentsRef.current.some((comment) => comment.id === row.id)) return
+              const next = [...commentsRef.current, row]
+              setComments(next)
+              onChanged(next.length)
               setNewCommentBanner(true)
               setTimeout(() => setNewCommentBanner(false), 4000)
               return
@@ -122,11 +129,11 @@ export function TaskComments({
 
             if (payload.eventType === "DELETE") {
               const oldRow = payload.old as { id: string }
-              setComments((previous) => {
-                const next = previous.filter((comment) => comment.id !== oldRow.id)
-                if (next.length !== previous.length) onChanged(next.length)
-                return next
-              })
+              const next = commentsRef.current.filter((comment) => comment.id !== oldRow.id)
+              if (next.length !== commentsRef.current.length) {
+                setComments(next)
+                onChanged(next.length)
+              }
             }
           }
         )

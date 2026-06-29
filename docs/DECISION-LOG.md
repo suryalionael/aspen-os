@@ -439,6 +439,16 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
+### DEC-043 — Sprint 4 Priority 5: completion sidebar exposed a missing `min-w-0` in the project content's flex chain
+**Finding:** Adding a fixed-width right-hand `<aside>` (the new always-visible completion sidebar) inside `KanbanBoard` revealed that `ProjectSidebar`'s content-area flex child (`<div className="flex flex-1 flex-col">{children}</div>`) had no `min-w-0`. Without it, a flex item's default `min-width: auto` refuses to shrink below its content's intrinsic width — so the wide Kanban-columns row (already legitimately wider than most viewports, contained by its own `overflow-x-auto`) was inflating the *entire page* to its width instead of scrolling within its own box, pushing the new sidebar off-screen to the right (`document.body.scrollWidth` measured 1780px against a 1280px viewport). This almost certainly already caused page-level horizontal scroll on wide boards before this sidebar existed — it just had nothing visible riding on the cut-off space to expose it.
+**Decision:** Added `min-w-0` to that one flex child in `components/project/project-sidebar.tsx`. No other layout changes were needed — `KanbanBoard`'s own `min-w-0 flex-1` wrapper (added alongside the Priority 4 view tabs) was already correct; it just had nothing constraining its own parent's width.
+**Rationale:** This is the same `min-w-0`-on-flex-children class of bug as the Pilot Readiness mobile-sidebar fix (DEC-039) — confirmed by direct measurement (`getBoundingClientRect`/`scrollWidth` via Playwright), not guessed, per this project's "collect evidence first" debugging rule.
+**Owner:** Product Engineer
+**Date:** 2026-06-29 (Sprint 4)
+**Future Revisit Conditions:** If a future wide-content view (e.g. a future Gantt chart) reintroduces page-level horizontal scroll, check this exact flex chain (`ProjectSidebar`'s content child → page.tsx's column wrapper → the view's own row) for a missing `min-w-0` before assuming it's a new bug.
+
+---
+
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:
 
 - **Single-member workspaces vs. "shared with the whole team" messaging** (see DEC-011 / audit C-2) — needs an explicit Founder/PM call before pilot messaging goes out.

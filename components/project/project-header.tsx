@@ -5,6 +5,7 @@ import { useState } from "react"
 import { ProjectSettingsDialog } from "@/components/project/project-settings-dialog"
 import { ProjectFavoriteButton } from "@/components/project/project-favorite-button"
 import type { ProjectStatus } from "@/lib/actions/projects"
+import { formatDueDate } from "@/lib/utils/dates"
 
 const STATUS_STYLES: Record<ProjectStatus, string> = {
   active: "bg-emerald-100 text-emerald-800",
@@ -16,13 +17,6 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   active: "Active",
   on_hold: "On hold",
   completed: "Completed",
-}
-
-// Postgres `date` columns come back as a bare "YYYY-MM-DD" string - see
-// the identical reasoning in task-card.tsx's formatDueDate.
-function formatDueDate(dateStr: string): string {
-  const [year, month, day] = dateStr.split("-").map(Number)
-  return new Date(year, month - 1, day).toLocaleDateString()
 }
 
 function initials(email: string): string {

@@ -1,13 +1,6 @@
 "use client"
 
-import {
-  useActionState,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useTransition,
-} from "react"
+import { useCallback, useEffect, useState, useTransition } from "react"
 import dynamic from "next/dynamic"
 
 import { Button } from "@/components/ui/button"
@@ -71,7 +64,16 @@ export function TaskDetailDialog({
   onCommentCountChanged: (taskId: string, count: number) => void
   onAttachmentCountChanged: (taskId: string, count: number) => void
 }) {
-  const [editState, editAction, editPending] = useActionState(editTask, undefined)
+  // Server Actions invoked via <form action={fn}> + useActionState
+  // reliably worked in dev but silently never reached the server in
+  // production for forms inside this dialog's Radix Portal (confirmed
+  // directly: the browser's own FormData was correct, but no request
+  // for the action ever fired) — the same failure mode found and fixed
+  // for TaskAttachments' upload. Calling editTask directly from a plain
+  // onSubmit handler, like every other mutation in this dialog already
+  // does, sidesteps it entirely.
+  const [editError, setEditError] = useState<string | null>(null)
+  const [editPending, setEditPending] = useState(false)
   const [, startTransition] = useTransition()
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [archiveDeleteError, setArchiveDeleteError] = useState<string | null>(null)
@@ -105,6 +107,7 @@ export function TaskDetailDialog({
     let active = true
     setConfirmingDelete(false)
     setArchiveDeleteError(null)
+    setEditError(null)
     setDetailLoading(true)
     setActivityLoading(true)
 
@@ -156,28 +159,23 @@ export function TaskDetailDialog({
     })
   }, [taskId])
 
-  // Guards against an infinite render loop: onTaskUpdated is a plain
-  // closure recreated on every KanbanBoard render (not memoized), so
-  // including it in the dependency array means calling it (which updates
-  // KanbanBoard's state and re-renders it) produces a new function
-  // identity, re-firing this effect indefinitely even though editState
-  // itself hasn't changed. Tracking the last-handled editState by
-  // reference makes the effect idempotent regardless of callback churn.
-  const handledEditState = useRef<typeof editState>(undefined)
-  useEffect(() => {
-    if (
-      editState &&
-      "success" in editState &&
-      handledEditState.current !== editState
-    ) {
-      handledEditState.current = editState
-      setTaskDetail((previous) =>
-        previous ? { ...previous, ...editState.task } : previous
-      )
-      onTaskUpdated(editState.task)
+  function handleEditSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+    setEditError(null)
+    setEditPending(true)
+    startTransition(async () => {
+      const result = await editTask(undefined, formData)
+      setEditPending(false)
+      if (!result || "error" in result) {
+        setEditError(result?.error ?? "Could not update task.")
+        return
+      }
+      setTaskDetail((previous) => (previous ? { ...previous, ...result.task } : previous))
+      onTaskUpdated(result.task)
       refetchActivity()
-    }
-  }, [editState, onTaskUpdated, refetchActivity])
+    })
+  }
 
   if (!taskId || !taskDetail) {
     return (
@@ -229,7 +227,7 @@ export function TaskDetailDialog({
           <DialogTitle>Task details</DialogTitle>
         </DialogHeader>
 
-        <form action={editAction} className="flex flex-col gap-3">
+        <form onSubmit={handleEditSubmit} className="flex flex-col gap-3">
           <input type="hidden" name="taskId" value={taskDetail.id} />
 
           <div className="flex flex-col gap-1.5">
@@ -347,9 +345,9 @@ export function TaskDetailDialog({
             </p>
           </div>
 
-          {editState && "error" in editState && (
+          {editError && (
             <p role="alert" className="text-sm text-destructive">
-              {editState.error}
+              {editError}
             </p>
           )}
           <Button type="submit" size="sm" disabled={editPending} className="self-start">

@@ -489,6 +489,15 @@ Every entry below documents a decision that was already made and approved somewh
 **Date:** 2026-06-29 (Sprint 4)
 **Future Revisit Conditions:** If production Server Actions continue to feel slow (~7s for a simple update), investigate Vercel region vs. Supabase project region alignment before assuming a code bug — that gap alone could explain it. If a third instance of `requestSubmit()`-from-an-unrelated-handler failing to fire a form action turns up, it's worth filing upstream against Next.js/Radix rather than continuing to patch call sites one at a time.
 
+### DEC-048 — Sprint 4 Priority 11: attachment storage keys now built from a UUID + sanitized extension only, never the raw filename
+**Finding:** The original Priority 11 bug report ("Invalid key") pointed at `uploadAttachment`'s storage path: `` `${taskId}/${crypto.randomUUID()}-${file.name}` `` interpolated the user-supplied filename directly into the Supabase Storage (S3-compatible) object key. Confirmed directly: uploading a file named `my file (test) #1.png` is exactly the kind of name (spaces, parentheses, `#`) S3-style keys reject.
+**Decision:** The storage key is now `` `${taskId}/${crypto.randomUUID()}${extension}` ``, where `extension` is the original filename's extension lowercased and stripped of anything outside `[a-z0-9.]`. The *displayed* `file_name` stored in `task_attachments` and shown in the UI is untouched — still the exact original filename, including spaces/punctuation/unicode — only the underlying object key changed.
+**Rationale:** This is the standard fix for this class of bug (never trust user input as a storage key) and was verified directly: the same problem filename that would have broken the old key format uploaded and displayed correctly after this change.
+**Tradeoffs:** None. If a file has no extension, the key has none either, which is fine — `contentType` (already stored separately) is what downloads/previews rely on, not the key's extension.
+**Owner:** Product Engineer
+**Date:** 2026-06-29 (Sprint 4)
+**Future Revisit Conditions:** None expected — this closes Priority 11 as originally reported.
+
 ---
 
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:

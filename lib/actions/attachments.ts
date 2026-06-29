@@ -86,8 +86,22 @@ export async function uploadAttachment(
 
   // Unlike the avatar bucket's fixed per-user path, a task can hold many
   // attachments, so each upload gets its own unique path rather than
-  // overwriting a previous one at the same key.
-  const path = `${taskId}/${crypto.randomUUID()}-${file.name}`
+  // overwriting a previous one at the same key. The original file.name is
+  // kept as the *displayed* file_name (below), but Supabase Storage's S3-
+  // compatible backend rejects object keys containing spaces and various
+  // punctuation — building the key from an arbitrary filename surfaced
+  // exactly that ("Invalid key") for any upload whose name wasn't plain
+  // ASCII/underscore/hyphen, so the key itself only ever uses the random
+  // UUID plus a sanitized extension.
+  const lastDotIndex = file.name.lastIndexOf(".")
+  const extension =
+    lastDotIndex > 0
+      ? file.name
+          .slice(lastDotIndex)
+          .toLowerCase()
+          .replace(/[^a-z0-9.]/g, "")
+      : ""
+  const path = `${taskId}/${crypto.randomUUID()}${extension}`
 
   const { error: uploadError } = await supabase.storage
     .from("task-attachments")

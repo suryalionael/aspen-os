@@ -71,12 +71,11 @@ test("overdue indicator, newest/oldest/assignee sort, description search, and ke
   let savePersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Save" }).click()
   await savePersisted
-  // Escaping immediately after the network response can race ahead of
-  // React committing useActionState's result and running the effect that
-  // propagates it up to the board (confirmed directly: closing on the
-  // network response alone is flaky, closing after the Activity panel
-  // shows the edit — which only renders after that same effect commits —
-  // is not).
+  // Save closes the dialog automatically (Priority 10) — reopen to check
+  // the edit landed in the Activity panel.
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeHidden()
+  await page.getByTestId("task-card").getByText("First task").click()
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
   await expect(page.getByText("Description changed", { exact: false })).toBeVisible()
   await page.keyboard.press("Escape")
 
@@ -87,6 +86,9 @@ test("overdue indicator, newest/oldest/assignee sort, description search, and ke
   savePersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Save" }).click()
   await savePersisted
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeHidden()
+  await page.getByTestId("task-card").getByText("Second task").click()
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
   await expect(page.getByText("Due date changed", { exact: false })).toBeVisible()
   await page.keyboard.press("Escape")
 
@@ -97,6 +99,9 @@ test("overdue indicator, newest/oldest/assignee sort, description search, and ke
   savePersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Save" }).click()
   await savePersisted
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeHidden()
+  await page.getByTestId("task-card").getByText("Third task").click()
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
   await expect(page.getByText("Due date changed", { exact: false })).toBeVisible()
   await page.getByRole("heading", { name: "Assignees" }).waitFor({ state: "visible" })
   await page.getByRole("button", { name: email, exact: false }).click()

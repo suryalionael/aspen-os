@@ -46,6 +46,10 @@ test("dashboard surfaces assigned/due-today/upcoming tasks, favorite projects, a
   const editPersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Save" }).click()
   await editPersisted
+  // Save closes the dialog automatically (Priority 10) — reopen to assign.
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeHidden()
+  await page.getByTestId("task-card").getByText("Dashboard task").click()
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
   await page.getByRole("heading", { name: "Assignees" }).waitFor({ state: "visible" })
   await page.getByRole("button", { name: email, exact: false }).click()
   await expect(page.getByText("Assigned to", { exact: false })).toBeVisible()

@@ -510,6 +510,16 @@ Do not treat any of the above as settled. If you resolve one, add it to the appr
 
 ---
 
+### DEC-051 — Sprint 4 Priority 10: task edit form closes automatically on a successful Save
+**Decision:** `handleEditSubmit` (`task-detail-dialog.tsx`) now calls `onOpenChange(false)` immediately after `editTask` succeeds, instead of leaving the dialog open and refetching its own activity feed. The board/card already reflect the edit via the existing `onTaskUpdated` optimistic-update path, so there was nothing left for the dialog to show — refetching activity right before unmounting was a wasted request, removed along with the close.
+**Rationale:** Directly requested behavior ("After clicking Save: immediately update UI, close modal automatically, preserve optimistic updates, no duplicate requests, no unnecessary reloads"). All four were already true or became true with this one change: optimistic updates were already in place (DEC-047's `handleEditSubmit` refactor); duplicate requests were already prevented by the `editPending` flag disabling the Save button; no reload was added (no `router.refresh()` here, unlike `commitMove` in DEC-049 — `editTask` already self-corrects server-rendered siblings via Next.js's automatic post-action refresh).
+**Tradeoffs:** Three existing Playwright tests (`board-power-features`, `dashboard`, `notifications`) asserted on Activity-panel text or continued interacting with other dialog sections (Assignees) immediately after clicking Save, assuming the dialog stayed open — all three updated to explicitly wait for the dialog to close, then reopen the task before continuing, rather than relying on it staying open.
+**Owner:** Product Engineer
+**Date:** 2026-06-29 (Sprint 4)
+**Future Revisit Conditions:** If pilot feedback finds the auto-close interrupts a common "edit several fields across multiple dialog sections in one sitting" workflow, consider making it conditional (e.g. only auto-close if no other section was touched this session) rather than reverting outright.
+
+---
+
 ### DEC-050 — Sprint 4 Priority 9: multiple assignees via a new task_assignees join table; tasks.assignee_id kept as "primary assignee"
 **Decision:** A new `task_assignees (task_id, user_id, created_at)` join table — composite PK, RLS reusing `is_workspace_member_for_task`, granted to `authenticated` — mirrors `task_labels` (DEC's migration 013) exactly, down to the same insert/select/delete policy shape. New `lib/actions/assignees.ts` (`getTaskAssignees`, `assignUserToTask`, `unassignUserFromTask`) mirrors `lib/actions/labels.ts`'s structure. A new `TaskAssigneePicker` component (modeled on `TaskLabelPicker`) replaced the old single `<select id="task-assignee">` in the task edit form. `TaskCard` now shows a stacked-initials avatar group (capped at 3 + "+N" overflow) instead of one assignee's email text.
 

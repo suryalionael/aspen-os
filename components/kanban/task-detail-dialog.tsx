@@ -160,7 +160,11 @@ export function TaskDetailDialog({
       }
       setTaskDetail((previous) => (previous ? { ...previous, ...result.task } : previous))
       onTaskUpdated(result.task)
-      refetchActivity()
+      // Closes immediately on success — the board/card already reflect
+      // the change via onTaskUpdated's optimistic update, so there's
+      // nothing left for this dialog to show; refetching its own
+      // activity feed right before unmounting would be a wasted request.
+      onOpenChange(false)
     })
   }
 

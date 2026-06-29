@@ -591,6 +591,61 @@ export async function getTaskActivity(
   return { success: true, activity: (data ?? []) as TaskActivityEntry[] }
 }
 
+export type ProjectActivityEntry = TaskActivityEntry & {
+  task_id: string
+  task_title: string
+}
+
+// Sprint 4 Priority 4's project-wide "Activity" tab: task_activity is
+// per-task (DEC-021), so this reaches it through tasks.project_id rather
+// than a new project-scoped log table — the same data getTaskActivity
+// already reads, just joined across every task in the project instead of
+// one. Like getTaskActivity, this disappears along with a deleted task
+// (the FK cascade), unlike the durable workspace-wide audit_log.
+export async function getProjectActivity(
+  projectId: string
+): Promise<{ error: string } | { success: true; activity: ProjectActivityEntry[] }> {
+  const supabase = await createClient()
+
+  const { data: projectTasks, error: tasksError } = await supabase
+    .from("tasks")
+    .select("id, title")
+    .eq("project_id", projectId)
+
+  if (tasksError) {
+    return { error: tasksError.message }
+  }
+
+  const titleByTaskId = new Map((projectTasks ?? []).map((task) => [task.id, task.title]))
+  const taskIds = Array.from(titleByTaskId.keys())
+  if (taskIds.length === 0) {
+    return { success: true, activity: [] }
+  }
+
+  const { data, error } = await supabase
+    .from("task_activity")
+    .select("id, event_type, metadata, created_at, actor_id, task_id")
+    .in("task_id", taskIds)
+    .order("created_at", { ascending: false })
+    .limit(100)
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  const activity = (data ?? []).map((row) => ({
+    id: row.id,
+    event_type: row.event_type,
+    metadata: row.metadata as Record<string, unknown> | null,
+    created_at: row.created_at,
+    actor_id: row.actor_id,
+    task_id: row.task_id,
+    task_title: titleByTaskId.get(row.task_id) ?? "Untitled task",
+  }))
+
+  return { success: true, activity }
+}
+
 export type ArchivedTask = {
   id: string
   title: string

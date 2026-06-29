@@ -429,6 +429,16 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
+### DEC-042 — Sprint 4 Priority 4: project Activity tab reads `task_activity` across the project, no new log table
+**Decision:** The new "Activity" view tab calls `getProjectActivity(projectId)`, which fetches every task in the project, then queries `task_activity` with `.in("task_id", taskIds)` — not a single embedded-resource filter (`tasks.project_id=eq.X`), since that filter form's behavior on the parent rows isn't reliably an inner-join restriction without an explicit `!inner` modifier, and getting this wrong silently returns unfiltered or null-padded rows rather than erroring. "Today" and "This Week" are pure client-side filters over the board's already-loaded `allTasks` — no new query at all. "Table" is a new presentational component over the same data Kanban already renders.
+**Rationale:** `task_activity` already has everything the new tab needs (DEC-021/DEC-006) and is already RLS-scoped per task via `is_workspace_member_for_task`, so querying across a project's task IDs needed no new policy or grant. Building a separate project-scoped activity log would duplicate data and the eventual-cascade-on-delete behavior `task_activity` already has by design.
+**Tradeoffs:** Same accepted limitation as the per-task activity panel — if a task is deleted, its activity entries cascade away with it (DEC-021), so a deleted task's history silently drops out of the project Activity feed too. This is consistent with the existing per-task panel's behavior, not a new gap.
+**Owner:** Product Engineer
+**Date:** 2026-06-29 (Sprint 4)
+**Future Revisit Conditions:** If a durable (survives-task-deletion) project history is ever needed, point the Activity tab at `audit_log` instead — but `audit_log` has no `project_id` column today (DEC-035's table only has `workspace_id`), so that would need its own migration first.
+
+---
+
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:
 
 - **Single-member workspaces vs. "shared with the whole team" messaging** (see DEC-011 / audit C-2) — needs an explicit Founder/PM call before pilot messaging goes out.

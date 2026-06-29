@@ -26,7 +26,26 @@ import { ArchivedTasksDialog } from "@/components/kanban/archived-tasks-dialog"
 import { BoardToolbar, type SortMode } from "@/components/kanban/board-toolbar"
 import { KanbanColumn } from "@/components/kanban/kanban-column"
 import { TaskDetailDialog } from "@/components/kanban/task-detail-dialog"
+import { TaskListView } from "@/components/kanban/task-list-view"
+import { TaskTableView } from "@/components/kanban/task-table-view"
+import { ProjectActivityFeed } from "@/components/kanban/project-activity-feed"
 import { ToastStack } from "@/components/ui/toast-stack"
+
+const VIEW_TABS = [
+  { value: "board", label: "Board" },
+  { value: "today", label: "Today" },
+  { value: "week", label: "This Week" },
+  { value: "calendar", label: "Calendar" },
+  { value: "table", label: "Table" },
+  { value: "activity", label: "Activity" },
+] as const
+type ViewMode = (typeof VIEW_TABS)[number]["value"]
+
+function toDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate()
+  ).padStart(2, "0")}`
+}
 
 // Loaded only when the user actually toggles to Calendar view — most
 // sessions only ever use Kanban, so this (and its @tanstack/react-virtual
@@ -105,7 +124,7 @@ export function KanbanBoard({
   const [labelFilter, setLabelFilter] = useState("")
   const [sortMode, setSortMode] = useState<SortMode>("manual")
   const [assigneeEmailById, setAssigneeEmailById] = useState<Map<string, string>>(new Map())
-  const [viewMode, setViewMode] = useState<"kanban" | "calendar">("kanban")
+  const [viewMode, setViewMode] = useState<ViewMode>("board")
   const { toasts, pushToast } = useToasts()
   const recentlyTouched = useRef<Map<string, number>>(new Map())
 
@@ -367,6 +386,23 @@ export function KanbanBoard({
     () => STATUSES.flatMap((status) => tasksByStatus[status]),
     [tasksByStatus]
   )
+
+  const todayTasks = useMemo(() => {
+    const todayKey = toDateKey(new Date())
+    return allTasks.filter((task) => task.due_date === todayKey)
+  }, [allTasks])
+
+  const weekTasks = useMemo(() => {
+    const now = new Date()
+    const todayKey = toDateKey(now)
+    const weekFromNow = new Date(now)
+    weekFromNow.setDate(weekFromNow.getDate() + 7)
+    const weekFromNowKey = toDateKey(weekFromNow)
+    return allTasks.filter(
+      (task) =>
+        task.due_date !== null && task.due_date >= todayKey && task.due_date <= weekFromNowKey
+    )
+  }, [allTasks])
 
   const isFiltered = Boolean(searchQuery || priorityFilter || labelFilter)
   const isViewModified = isFiltered || sortMode !== "manual"
@@ -722,32 +758,23 @@ export function KanbanBoard({
     <div className="flex flex-1 flex-col gap-4 p-6 md:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1 rounded-lg bg-secondary/60 p-1">
-          <button
-            type="button"
-            aria-pressed={viewMode === "kanban"}
-            onClick={() => setViewMode("kanban")}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              viewMode === "kanban"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Kanban
-          </button>
-          <button
-            type="button"
-            aria-pressed={viewMode === "calendar"}
-            onClick={() => setViewMode("calendar")}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              viewMode === "calendar"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Calendar
-          </button>
+          {VIEW_TABS.map((tab) => (
+            <button
+              key={tab.value}
+              type="button"
+              aria-pressed={viewMode === tab.value}
+              onClick={() => setViewMode(tab.value)}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                viewMode === tab.value
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
-        {viewMode === "kanban" && (
+        {viewMode === "board" && (
           <BoardToolbar
             searchQuery={searchQuery}
             onSearchQueryChange={setSearchQuery}
@@ -762,7 +789,7 @@ export function KanbanBoard({
         )}
         <ArchivedTasksDialog projectId={projectId} onTaskRestored={handleTaskRestored} />
       </div>
-      {viewMode === "kanban" && isViewModified && (
+      {viewMode === "board" && isViewModified && (
         <p className="text-xs text-muted-foreground">
           Drag and drop is disabled while searching, filtering, or sorting.
         </p>
@@ -775,13 +802,32 @@ export function KanbanBoard({
           {error}
         </p>
       )}
-      {viewMode === "calendar" ? (
+      {viewMode === "calendar" && (
         <CalendarView
           tasks={allTasks}
           onDueDateChange={handleCalendarDueDateChange}
           onTaskOpen={setOpenTaskId}
         />
-      ) : (
+      )}
+      {viewMode === "today" && (
+        <TaskListView tasks={todayTasks} emptyMessage="Nothing due today." onTaskOpen={setOpenTaskId} />
+      )}
+      {viewMode === "week" && (
+        <TaskListView
+          tasks={weekTasks}
+          emptyMessage="Nothing due in the next 7 days."
+          onTaskOpen={setOpenTaskId}
+        />
+      )}
+      {viewMode === "table" && (
+        <TaskTableView
+          tasks={allTasks}
+          assigneeEmailById={assigneeEmailById}
+          onTaskOpen={setOpenTaskId}
+        />
+      )}
+      {viewMode === "activity" && <ProjectActivityFeed projectId={projectId} />}
+      {viewMode === "board" && (
         <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
           <div className="flex flex-1 gap-5 overflow-x-auto pb-2">
             {STATUSES.map((status) => (

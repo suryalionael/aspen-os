@@ -51,10 +51,13 @@ export function KanbanColumn({
     <div
       ref={setNodeRef}
       data-testid={`column-${status}`}
-      className="flex w-72 flex-shrink-0 flex-col gap-3 rounded-lg bg-secondary/50 p-3"
+      className="flex w-72 flex-shrink-0 flex-col gap-3 rounded-xl bg-secondary/40 p-3"
     >
-      <h3 className="px-1 text-sm font-semibold">
+      <h3 className="flex items-center gap-2 px-1 text-sm font-semibold tracking-tight">
         {COLUMN_LABELS[status] ?? status}
+        <span className="rounded-full bg-secondary px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+          {tasks.length}
+        </span>
       </h3>
       {/* Per ux-review.md §6: quick-add lives only in "To Do" — new tasks
           should be immediately actionable, not buried in the backlog. */}
@@ -70,7 +73,7 @@ export function KanbanColumn({
             {isFiltered ? "No matching tasks" : "No tasks yet"}
           </p>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2.5">
             {tasks.map((task) => (
               <TaskCard
                 key={task.id}

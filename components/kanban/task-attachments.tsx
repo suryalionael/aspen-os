@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState, useEffect, useRef, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 
 import {
   deleteAttachment,
@@ -25,9 +25,10 @@ export function TaskAttachments({
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [loading, setLoading] = useState(true)
   const [deleteError, setDeleteError] = useState<string | null>(null)
-  const [uploadState, uploadAction] = useActionState(uploadAttachment, undefined)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
   const [, startTransition] = useTransition()
-  const formRef = useRef<HTMLFormElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     // Same StrictMode double-invoke guard used by TaskChecklist/TaskComments
@@ -45,16 +46,36 @@ export function TaskAttachments({
     }
   }, [taskId])
 
-  useEffect(() => {
-    if (uploadState && "success" in uploadState) {
-      const next = [uploadState.attachment, ...attachments]
+  // Calling uploadAttachment directly (rather than via <form
+  // action={fn}> + useActionState, triggered by a synthetic
+  // requestSubmit() from this input's onChange) — that pattern silently
+  // never reached the server in production for forms inside this
+  // dialog's Radix Portal, even though the file was correctly attached
+  // to the input (confirmed directly: no network request for the
+  // action ever fired, despite working in dev). Every other mutation in
+  // this dialog already calls its action directly from a plain handler;
+  // this brings uploads in line with that proven pattern.
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setUploadError(null)
+    setUploading(true)
+    const formData = new FormData()
+    formData.set("taskId", taskId)
+    formData.set("file", file)
+    startTransition(async () => {
+      const result = await uploadAttachment(undefined, formData)
+      setUploading(false)
+      if (!result || "error" in result) {
+        setUploadError(result?.error ?? "Could not upload attachment.")
+        return
+      }
+      const next = [result.attachment, ...attachments]
       setAttachments(next)
-      formRef.current?.reset()
+      if (fileInputRef.current) fileInputRef.current.value = ""
       onChanged(next.length)
-    }
-    // Runs once per upload result, not on every onChanged identity change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uploadState])
+    })
+  }
 
   function handleDelete(attachment: Attachment) {
     setDeleteError(null)
@@ -116,19 +137,20 @@ export function TaskAttachments({
           ))}
         </ul>
       )}
-      <form ref={formRef} action={uploadAction} className="flex items-center gap-2">
-        <input type="hidden" name="taskId" value={taskId} />
+      <div className="flex items-center gap-2">
         <input
+          ref={fileInputRef}
           type="file"
-          name="file"
           aria-label="Attachment"
-          onChange={() => formRef.current?.requestSubmit()}
+          onChange={handleFileChange}
+          disabled={uploading}
           className="text-sm"
         />
-      </form>
-      {uploadState && "error" in uploadState && (
+        {uploading && <span className="text-xs text-muted-foreground">Uploading…</span>}
+      </div>
+      {uploadError && (
         <p role="alert" className="text-sm text-destructive">
-          {uploadState.error}
+          {uploadError}
         </p>
       )}
       {deleteError && (

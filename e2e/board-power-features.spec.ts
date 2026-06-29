@@ -94,11 +94,13 @@ test("overdue indicator, newest/oldest/assignee sort, description search, and ke
   await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
   await waitForDialogSettled(page)
   await page.getByLabel("Due date").fill("2099-01-01")
-  await page.getByLabel("Assignee").selectOption({ label: email })
   savePersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Save" }).click()
   await savePersisted
   await expect(page.getByText("Due date changed", { exact: false })).toBeVisible()
+  await page.getByRole("heading", { name: "Assignees" }).waitFor({ state: "visible" })
+  await page.getByRole("button", { name: email, exact: false }).click()
+  await expect(page.getByText("Assigned to", { exact: false })).toBeVisible()
   await page.keyboard.press("Escape")
 
   // --- Overdue indicator: only the past-dated, non-done task shows it.

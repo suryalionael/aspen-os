@@ -29,7 +29,7 @@ type TaskCardProps = {
   status: string
   dueDate: string | null
   priority: string | null
-  assigneeEmail?: string | null
+  assigneeEmails?: string[]
   labels: Label[]
   checklistCompleted: number
   checklistTotal: number
@@ -38,6 +38,37 @@ type TaskCardProps = {
   progress: number
   onMove: (id: string, newStatus: string) => void
   onOpen: (id: string) => void
+}
+
+function initials(email: string): string {
+  return email.slice(0, 2).toUpperCase()
+}
+
+// Stacked initials avatars (same visual language as ProjectHeader's
+// member list) — caps at 3 visible plus a "+N" overflow badge so a task
+// with many assignees still fits the card's fixed width.
+function AssigneeStack({ emails }: { emails: string[] }) {
+  if (emails.length === 0) return null
+  const visible = emails.slice(0, 3)
+  const overflow = emails.length - visible.length
+  return (
+    <span className="flex items-center">
+      {visible.map((email) => (
+        <span
+          key={email}
+          title={email}
+          className="-ml-1.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-card bg-secondary text-[9px] font-medium text-secondary-foreground first:ml-0"
+        >
+          {initials(email)}
+        </span>
+      ))}
+      {overflow > 0 && (
+        <span className="-ml-1.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-card bg-muted text-[9px] font-medium">
+          +{overflow}
+        </span>
+      )}
+    </span>
+  )
 }
 
 // The actual card markup, shared by the sortable in-column card and its
@@ -51,7 +82,7 @@ function TaskCardBody({
   status,
   dueDate,
   priority,
-  assigneeEmail,
+  assigneeEmails = [],
   labels,
   checklistCompleted,
   checklistTotal,
@@ -113,7 +144,7 @@ function TaskCardBody({
       )}
       {(dueDate ||
         priority ||
-        assigneeEmail ||
+        assigneeEmails.length > 0 ||
         commentCount > 0 ||
         attachmentCount > 0) && (
         <div className="flex flex-wrap items-center gap-2">
@@ -144,9 +175,7 @@ function TaskCardBody({
               {formatDueDate(dueDate)}
             </span>
           )}
-          {assigneeEmail && (
-            <span className="text-xs text-muted-foreground">{assigneeEmail}</span>
-          )}
+          <AssigneeStack emails={assigneeEmails} />
         </div>
       )}
     </div>

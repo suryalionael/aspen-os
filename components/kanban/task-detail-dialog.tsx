@@ -13,11 +13,12 @@ import {
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { TaskLabelPicker } from "@/components/kanban/task-label-picker"
+import { TaskAssigneePicker } from "@/components/kanban/task-assignee-picker"
 import { TaskChecklist } from "@/components/kanban/task-checklist"
 import { TaskComments } from "@/components/kanban/task-comments"
 import { TaskAttachments } from "@/components/kanban/task-attachments"
 import type { Label } from "@/lib/labels"
-import { getProjectMembers, type ProjectMember } from "@/lib/actions/projects"
+import type { TaskAssignee } from "@/lib/actions/assignees"
 import { getProfile } from "@/lib/actions/profile"
 import { formatDateTime } from "@/lib/utils/format-date"
 import { describeActivity as describeActivityEvent } from "@/lib/utils/activity-labels"
@@ -49,6 +50,7 @@ export function TaskDetailDialog({
   onTaskArchiveChange,
   onTaskDeleted,
   onLabelsChanged,
+  onAssigneesChanged,
   onChecklistChanged,
   onCommentCountChanged,
   onAttachmentCountChanged,
@@ -60,6 +62,7 @@ export function TaskDetailDialog({
   onTaskArchiveChange: (taskId: string, archivedAt: string | null) => void
   onTaskDeleted: (taskId: string) => void
   onLabelsChanged: (taskId: string, labels: Label[]) => void
+  onAssigneesChanged: (taskId: string, assignees: TaskAssignee[]) => void
   onChecklistChanged: (taskId: string, completed: number, total: number) => void
   onCommentCountChanged: (taskId: string, count: number) => void
   onAttachmentCountChanged: (taskId: string, count: number) => void
@@ -83,8 +86,6 @@ export function TaskDetailDialog({
   const [progressDraft, setProgressDraft] = useState(0)
   const [activity, setActivity] = useState<TaskActivityEntry[]>([])
   const [activityLoading, setActivityLoading] = useState(false)
-  const [members, setMembers] = useState<ProjectMember[]>([])
-  const [membersLoaded, setMembersLoaded] = useState(false)
   const [timezone, setTimezone] = useState<string | null>(null)
 
   useEffect(() => {
@@ -130,20 +131,6 @@ export function TaskDetailDialog({
     }
   }, [open, taskId])
 
-  const projectIdForMembers = taskDetail?.project_id ?? null
-  useEffect(() => {
-    if (!projectIdForMembers) return
-    let active = true
-    setMembersLoaded(false)
-    getProjectMembers(projectIdForMembers).then((result) => {
-      if (!active) return
-      setMembers("success" in result ? result.members : [])
-      setMembersLoaded(true)
-    })
-    return () => {
-      active = false
-    }
-  }, [projectIdForMembers])
 
   // The activity panel otherwise only loads once when the dialog opens —
   // without an explicit refetch, editing, archiving, or relabeling a task
@@ -296,37 +283,6 @@ export function TaskDetailDialog({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="task-assignee" className="text-sm font-medium">
-              Assignee
-            </label>
-            <select
-              id="task-assignee"
-              name="assigneeId"
-              // Remounts once membersLoaded flips true so defaultValue is
-              // (re-)applied against the complete <option> list — without
-              // this, a save that landed before getProjectMembers()
-              // resolved would permanently lose the assignee: the browser
-              // can't select an option that doesn't exist yet at mount
-              // time, and React never re-applies defaultValue to an
-              // already-mounted uncontrolled <select> when children
-              // change later (confirmed directly: editing an already-
-              // assigned task's due date alone silently nulled out
-              // assignee_id).
-              key={`assignee-${taskDetail.id}-${membersLoaded}`}
-              defaultValue={taskDetail.assignee_id ?? ""}
-              disabled={!membersLoaded}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              <option value="">Unassigned</option>
-              {members.map((member) => (
-                <option key={member.user_id} value={member.user_id}>
-                  {member.email}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
             <label htmlFor="task-progress" className="text-sm font-medium">
               Progress {progressDraft}%
             </label>
@@ -361,6 +317,18 @@ export function TaskDetailDialog({
             taskId={taskDetail.id}
             onChanged={(count) => {
               onAttachmentCountChanged(taskDetail.id, count)
+              refetchActivity()
+            }}
+          />
+        </div>
+
+        <div className="border-t border-border pt-3">
+          <h3 className="mb-2 text-sm font-semibold">Assignees</h3>
+          <TaskAssigneePicker
+            taskId={taskDetail.id}
+            projectId={taskDetail.project_id}
+            onAssigneesChanged={(assignees) => {
+              onAssigneesChanged(taskDetail.id, assignees)
               refetchActivity()
             }}
           />

@@ -243,8 +243,11 @@ export type Database = {
           archived_at: string | null
           created_at: string
           created_by: string
+          description: string | null
+          due_date: string | null
           id: string
           name: string
+          status: string
           updated_at: string
           workspace_id: string
         }
@@ -252,8 +255,11 @@ export type Database = {
           archived_at?: string | null
           created_at?: string
           created_by: string
+          description?: string | null
+          due_date?: string | null
           id?: string
           name: string
+          status?: string
           updated_at?: string
           workspace_id: string
         }
@@ -261,8 +267,11 @@ export type Database = {
           archived_at?: string | null
           created_at?: string
           created_by?: string
+          description?: string | null
+          due_date?: string | null
           id?: string
           name?: string
+          status?: string
           updated_at?: string
           workspace_id?: string
         }

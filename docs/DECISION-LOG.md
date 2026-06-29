@@ -419,6 +419,16 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
+### DEC-041 — Sprint 4 Priority 3: `status` added directly to `projects`, not modeled as a new table or reusing `archived_at`
+**Decision:** Migration 031 adds three columns to `projects`: `description text`, `due_date date`, and `status text not null default 'active' check (status in ('active','on_hold','completed'))`. No new RLS policy was needed — `"Admins and owners can update projects"` (migration 023) is a row-level policy with no column list, so it already covers the new columns. Edited via a new `updateProjectDetails` Server Action, surfaced through `ProjectSettingsDialog`, and displayed in the new rich `ProjectHeader`.
+**Rationale:** `status` is a deliberately small, manually-set health indicator ("is this project actively being worked on") distinct from `archived_at`, which already means something specific and different (lifecycle/visibility — an archived project is hidden from the sidebar entirely). Conflating the two would mean an "on hold" project either has to stay fully visible with no way to flag it, or gets hidden via `archived_at` and loses the distinction between "paused" and "done with this, get it out of my way." A fixed three-value `check` constraint (not a new lookup table) matches this project's existing convention for small closed sets (see `tasks.priority`, `tasks.status` — both bare text columns with application-level validation, no enum type or lookup table).
+**Alternatives Considered:** A Postgres `enum` type for `status` (rejected — this codebase consistently avoids enum types in favor of plain `text` + `check`, since altering a `check` constraint is a simple migration but altering a Postgres enum's values has historically required more ceremony); a separate `project_status_history` table (rejected — no requirement yet for tracking status changes over time, would be premature).
+**Owner:** Product Engineer
+**Date:** 2026-06-27 (Sprint 4)
+**Future Revisit Conditions:** If a pilot org asks for more granular project stages (e.g. "planning," "in review"), extend the `check` constraint's value list rather than introducing a new table.
+
+---
+
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:
 
 - **Single-member workspaces vs. "shared with the whole team" messaging** (see DEC-011 / audit C-2) — needs an explicit Founder/PM call before pilot messaging goes out.

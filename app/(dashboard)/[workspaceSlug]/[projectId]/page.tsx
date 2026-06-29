@@ -14,7 +14,7 @@ export default async function ProjectPage({
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, name, workspace_id")
+    .select("id, name, workspace_id, description, due_date, status, project_favorites(user_id)")
     .eq("id", projectId)
     .maybeSingle()
 
@@ -32,6 +32,15 @@ export default async function ProjectPage({
     .eq("user_id", user?.id ?? "")
     .maybeSingle()
   const isAdminOrOwner = membership?.role === "owner" || membership?.role === "admin"
+  const isFavorite = project.project_favorites.some((row) => row.user_id === user?.id)
+
+  const { data: memberRows } = await supabase.rpc("get_workspace_members_with_email", {
+    p_workspace_id: project.workspace_id,
+  })
+  const members = (memberRows ?? []).map((member: { user_id: string; email: string }) => ({
+    user_id: member.user_id,
+    email: member.email,
+  }))
 
   // One indexed query via (project_id, status, position) — see
   // database-schema.md §2 — fetched once here and handed to the client
@@ -63,13 +72,22 @@ export default async function ProjectPage({
     commentCount: task.comments.length,
   }))
 
+  const completedCount = tasksWithLabels.filter((task) => task.status === "done").length
+
   return (
     <div className="flex flex-1 flex-col">
       <ProjectHeader
         projectId={project.id}
         workspaceSlug={workspaceSlug}
         initialName={project.name}
+        initialDescription={project.description}
+        initialDueDate={project.due_date}
+        initialStatus={project.status as "active" | "on_hold" | "completed"}
+        initialFavorite={isFavorite}
         canManageProject={isAdminOrOwner}
+        members={members}
+        totalTasks={tasksWithLabels.length}
+        completedTasks={completedCount}
       />
       <KanbanBoard projectId={project.id} initialTasks={tasksWithLabels} />
     </div>

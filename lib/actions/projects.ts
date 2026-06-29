@@ -83,6 +83,63 @@ export async function renameProject(
   return { success: true, name: data.name }
 }
 
+const PROJECT_STATUSES = ["active", "on_hold", "completed"] as const
+export type ProjectStatus = (typeof PROJECT_STATUSES)[number]
+
+export type ProjectDetails = {
+  description: string | null
+  due_date: string | null
+  status: ProjectStatus
+}
+
+export async function updateProjectDetails(
+  projectId: string,
+  details: { description: string; dueDate: string; status: string }
+): Promise<{ error: string } | { success: true; details: ProjectDetails }> {
+  if (!PROJECT_STATUSES.includes(details.status as ProjectStatus)) {
+    return { error: "Invalid project status." }
+  }
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  const { data, error } = await supabase
+    .from("projects")
+    .update({
+      description: details.description.trim() || null,
+      due_date: details.dueDate || null,
+      status: details.status,
+    })
+    .eq("id", projectId)
+    .select("name, workspace_id, description, due_date, status")
+    .single()
+
+  if (error || !data) {
+    return { error: error?.message ?? "Could not update project details." }
+  }
+
+  if (user) {
+    await logAuditEvent(supabase, {
+      workspaceId: data.workspace_id,
+      actorId: user.id,
+      action: "project.updated",
+      targetLabel: data.name,
+    })
+  }
+
+  revalidatePath("/", "layout")
+  return {
+    success: true,
+    details: {
+      description: data.description,
+      due_date: data.due_date,
+      status: data.status as ProjectStatus,
+    },
+  }
+}
+
 export async function archiveProject(
   projectId: string
 ): Promise<{ error: string } | { success: true }> {

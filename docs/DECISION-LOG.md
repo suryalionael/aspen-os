@@ -460,6 +460,16 @@ Every entry below documents a decision that was already made and approved somewh
 
 ---
 
+### DEC-045 — Sprint 4 Priority 7: dnd-kit DragOverlay for a floating drag, dashed placeholder for the source slot
+**Decision:** `TaskCard` was split into a presentational `TaskCardBody` (the actual markup) and two thin wrappers: `TaskCard` (calls `useSortable`, used for the real in-column card) and `TaskCardOverlay` (no sortable wiring, used only inside `KanbanBoard`'s new `<DragOverlay>`). While a card is being dragged, its original slot renders as a dashed-border placeholder instead of a faded copy of the card; the actual card now visually follows the cursor via the overlay, with a slight rotation and elevated shadow.
+**Rationale:** dnd-kit's own docs recommend `DragOverlay` for exactly this reason — without it, `useSortable`'s `transform` just moves the dragged item in place within the list's normal layout flow, which reads as "rough" (the literal complaint in Priority 7's brief) compared to a floating card that isn't constrained by the column's flex layout while in motion. Registering `useSortable` a second time under the same id for an overlay clone would be wrong (dnd-kit tracks one sortable node per id), so the overlay needed a separate, non-sortable component — hence the `TaskCardBody` extraction rather than a prop flag on the same component.
+**Tradeoffs:** The dashed placeholder uses a fixed `min-h-[3.5rem]` rather than measuring the actual dragged card's height, so a card with many labels/a long checklist leaves a slightly shorter gap than its real height while dragging — a minor, common tradeoff (Notion's own placeholder does the same) rather than added complexity to measure and sync heights.
+**Owner:** Product Engineer
+**Date:** 2026-06-29 (Sprint 4)
+**Future Revisit Conditions:** If the fixed placeholder height looks visibly wrong for very tall cards once multi-assignee avatars (Priority 9) or manual progress (Priority 8) add more content, consider measuring height via `useSortable`'s `node.current` rect instead.
+
+---
+
 These are known gaps surfaced during planning that have **not** been resolved into a decision yet — listed here so they aren't mistaken for settled questions, and so a future contributor knows where leadership input is still needed:
 
 - **Single-member workspaces vs. "shared with the whole team" messaging** (see DEC-011 / audit C-2) — needs an explicit Founder/PM call before pilot messaging goes out.

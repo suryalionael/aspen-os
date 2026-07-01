@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 
 import { createClient } from "@/lib/supabase/server"
 import { getWorkspaceBySlug } from "@/lib/data/workspace"
+import { getWorkspaceNotes } from "@/lib/actions/notes"
 import { formatDateTime } from "@/lib/utils/format-date"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -118,7 +119,7 @@ export default async function WorkspaceHomePage({
     .toISOString()
     .slice(0, 10)
 
-  const [assignedResult, dueTodayResult, upcomingResult, favoritesResult, taskIdsResult] =
+  const [assignedResult, dueTodayResult, upcomingResult, favoritesResult, taskIdsResult, notesResult] =
     await Promise.all([
       supabase
         .from("tasks")
@@ -151,7 +152,14 @@ export default async function WorkspaceHomePage({
         .eq("user_id", user.id)
         .in("project_id", projectIds),
       supabase.from("tasks").select("id, title").in("project_id", projectIds),
+      getWorkspaceNotes(workspace.id),
     ])
+
+  const announcements = (
+    "success" in notesResult ? notesResult.notes : []
+  )
+    .filter((note) => note.type === "announcement")
+    .slice(0, 3)
 
   const taskTitleById = new Map(
     (taskIdsResult.data ?? []).map((task) => [task.id, task.title])
@@ -188,6 +196,29 @@ export default async function WorkspaceHomePage({
   return (
     <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6">
       <h1 className="text-lg font-semibold">{workspace.name}</h1>
+
+      {announcements.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Announcements</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col gap-2">
+              {announcements.map((note) => (
+                <li key={note.id} className="text-sm">
+                  <Link
+                    href={`/${workspaceSlug}/notes`}
+                    className="font-medium hover:underline"
+                  >
+                    {note.title}
+                  </Link>
+                  <p className="line-clamp-2 text-muted-foreground">{note.body}</p>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>

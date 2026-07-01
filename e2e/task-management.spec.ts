@@ -60,11 +60,14 @@ test("edit, archive/restore, and delete all work from the task detail dialog", a
   await editPersisted
   await page.keyboard.press("Escape")
 
-  await expect(page.getByText("Renamed task")).toBeVisible()
+  // Scope to the kanban card to avoid a false strict-mode collision with the
+  // "Task updated: Renamed task" toast that the board's real-time subscription
+  // fires simultaneously.
+  await expect(page.getByTestId("task-card").getByText("Renamed task")).toBeVisible()
   await expect(page.getByText("Task to manage")).toHaveCount(0)
 
   // --- Archive: the task should disappear from the board ---
-  await page.getByText("Renamed task").click()
+  await page.getByTestId("task-card").getByText("Renamed task").click()
   await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
   await waitForDialogSettled(page)
   // Asserts on actual Activity panel content (not just each mutation's own
@@ -80,7 +83,7 @@ test("edit, archive/restore, and delete all work from the task detail dialog", a
 
   // --- Restore from the Archived dialog and confirm it reappears ---
   await page.getByRole("button", { name: "Archived", exact: true }).click()
-  await expect(page.getByText("Renamed task")).toBeVisible()
+  await expect(page.getByTestId("archived-task-row").getByText("Renamed task")).toBeVisible()
   const restorePersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Restore" }).click()
   await restorePersisted
@@ -90,7 +93,7 @@ test("edit, archive/restore, and delete all work from the task detail dialog", a
   ).toBeVisible()
 
   // --- Delete: requires a second confirming click, then is gone for good ---
-  await page.getByText("Renamed task").click()
+  await page.getByTestId("task-card").getByText("Renamed task").click()
   await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
   await waitForDialogSettled(page)
   await page.getByRole("button", { name: "Delete", exact: true }).click()

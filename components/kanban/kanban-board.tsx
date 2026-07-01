@@ -41,10 +41,16 @@ const VIEW_TABS = [
   { value: "today", label: "Today" },
   { value: "week", label: "This Week" },
   { value: "calendar", label: "Calendar" },
+  { value: "timeline", label: "Timeline" },
   { value: "table", label: "Table" },
   { value: "activity", label: "Activity" },
 ] as const
 type ViewMode = (typeof VIEW_TABS)[number]["value"]
+
+const TaskTimelineView = dynamic(
+  () => import("@/components/kanban/task-timeline-view").then((mod) => mod.TaskTimelineView),
+  { ssr: false, loading: () => <p className="text-sm text-muted-foreground">Loading…</p> }
+)
 
 // Loaded only when the user actually toggles to Calendar view — most
 // sessions only ever use Kanban, so this (and its @tanstack/react-virtual
@@ -873,6 +879,9 @@ export function KanbanBoard({
               onDueDateChange={handleCalendarDueDateChange}
               onTaskOpen={setOpenTaskId}
             />
+          )}
+          {viewMode === "timeline" && (
+            <TaskTimelineView tasks={allTasks} onTaskOpen={setOpenTaskId} />
           )}
           {viewMode === "today" && (
             <TaskListView tasks={todayTasks} emptyMessage="Nothing due today." onTaskOpen={setOpenTaskId} />

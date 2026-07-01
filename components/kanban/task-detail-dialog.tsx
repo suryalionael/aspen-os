@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { TaskLabelPicker } from "@/components/kanban/task-label-picker"
 import { TaskAssigneePicker } from "@/components/kanban/task-assignee-picker"
+import { TaskDependencyPicker } from "@/components/kanban/task-dependency-picker"
 import { TaskChecklist } from "@/components/kanban/task-checklist"
 import { TaskComments } from "@/components/kanban/task-comments"
 import { TaskAttachments } from "@/components/kanban/task-attachments"
@@ -336,6 +337,11 @@ export function TaskDetailDialog({
               refetchActivity()
             }}
           />
+        </div>
+
+        <div className="border-t border-border pt-3">
+          <h3 className="mb-2 text-sm font-semibold">Blocked by</h3>
+          <TaskDependencyPicker taskId={taskDetail.id} projectId={taskDetail.project_id} />
         </div>
 
         <div className="border-t border-border pt-3">

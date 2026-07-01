@@ -510,6 +510,17 @@ Do not treat any of the above as settled. If you resolve one, add it to the appr
 
 ---
 
+### DEC-053 — Sprint 4/5 Priority 13: one unified notes entity covers Documents, Quick Notes, Meeting Notes, and Announcements
+**Decision:** A single `notes (id, workspace_id, project_id, type, title, body, created_by, created_at, updated_at)` table replaces the four separate content tables that Priority 13's brief listed. The `type` column is a check-constrained enum (`document`, `quick_note`, `meeting_note`, `announcement`), differing only in which filter tab highlights them. Announcements are a thin wrapper: creating one also calls the EXISTING `logAuditEvent()` helper with action `"note.announcement_posted"`, meaning they appear in the Audit Log dialog that every workspace member can already see — no new feed/broadcast mechanism required. The workspace home dashboard gained an Announcements card as a first-class widget.
+**Rationale:** All four brief-listed content types share identical shape (title + markdown body, workspace-scoped, optionally linked to a project). A type tag is the simplest correct model — one table, one set of RLS policies, one actions file, one UI component — rather than four tables and four CRUD action sets with duplicated boilerplate. Reusing `logAuditEvent()` for broadcast satisfies the brief's "posts to an activity feed" intent without introducing a fifth table or a new notification pathway.
+**Tradeoffs:** No per-note access control (any workspace member can view/edit/delete any note) — sufficient for the small, trusted-team nonprofit orgs in scope, but would need per-creator ownership rules if public-facing collaboration is ever introduced. Announcement "notifications" (e.g. a bell badge when a new announcement is posted) were intentionally deferred — the `notifications.type` check constraint would need another migration value, and the brief made no mention of pushing announcements to individual user inboxes; the Audit Log is a suitable minimum-scope visibility mechanism.
+**Bug found and fixed during verification:** Same class as DEC-052's missing-grant bug — now explicitly listed in 035_notes.sql's inline comment so it won't recur.
+**Owner:** Product Engineer
+**Date:** 2026-06-29 (Sprint 4/5)
+**Future Revisit Conditions:** If announcement-as-notification is needed, add `announcement` to `notifications.type`'s check constraint and wire it in `createNote()`. If per-creator ownership rules are needed, add an `is_owner` RLS check on update/delete policies.
+
+---
+
 ### DEC-052 — Sprint 4 Priority 12: workspace calendar combines tasks, meetings, and project due dates as milestones
 **Decision:** The per-project Kanban "Calendar" tab's `CalendarView` (Sprint 3 Phase L) was generalized in place rather than forked: it now renders three optional event kinds — `tasks` (existing), `meetings`, and `milestones` — with month/week/**day** modes (day is new) and drag-to-reschedule extended to meetings via `useDraggable`'s `data` field (`{kind, id}`) instead of encoding kind in the draggable `id` string. The per-project tab's existing call site is untouched and unaffected — `meetings`/`milestones` default to `[]`, so its behavior and the regression test (`e2e/calendar.spec.ts`) are unchanged.
 

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { getWorkspaceBySlug } from "@/lib/data/workspace"
 import { ProjectSidebar } from "@/components/project/project-sidebar"
+import { CommandPalette } from "@/components/command-palette"
 
 export default async function WorkspaceLayout({
   children,
@@ -50,21 +51,27 @@ export default async function WorkspaceLayout({
       : "member"
 
   return (
-    <ProjectSidebar
-      workspaceId={workspace.id}
-      workspaceSlug={workspace.slug}
-      projects={projectsWithFavorite}
-      currentUserRole={currentUserRole}
-      workspaceSettings={{
-        id: workspace.id,
-        name: workspace.name,
-        description: workspace.description,
-        logoUrl: workspace.logo_url,
-        defaultTimezone: workspace.default_timezone,
-        archivedAt: workspace.archived_at,
-      }}
-    >
-      {children}
-    </ProjectSidebar>
+    <>
+      <ProjectSidebar
+        workspaceId={workspace.id}
+        workspaceSlug={workspace.slug}
+        projects={projectsWithFavorite}
+        currentUserRole={currentUserRole}
+        workspaceSettings={{
+          id: workspace.id,
+          name: workspace.name,
+          description: workspace.description,
+          logoUrl: workspace.logo_url,
+          defaultTimezone: workspace.default_timezone,
+          archivedAt: workspace.archived_at,
+        }}
+      >
+        {children}
+      </ProjectSidebar>
+      <CommandPalette
+        workspaceSlug={workspace.slug}
+        projects={projectsWithFavorite}
+      />
+    </>
   )
 }

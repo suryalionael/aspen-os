@@ -120,6 +120,13 @@ export function ProjectSidebar({
           >
             Notes
           </Link>
+          <Link
+            href={`/${workspaceSlug}/activity`}
+            onClick={closeDrawer}
+            className="rounded-md px-2 py-1.5 text-sm hover:bg-secondary"
+          >
+            Activity
+          </Link>
         </div>
 
         {isAdminOrOwner && (

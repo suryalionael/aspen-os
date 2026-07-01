@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import React, { useEffect, useRef, useState, useTransition } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -16,6 +16,21 @@ import {
 // How long a comment ID counts as "just written by this session" — see
 // the identical rationale in kanban-board.tsx (DEC-023).
 const SELF_ECHO_WINDOW_MS = 4000
+
+const MENTION_RE = /(@[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,})/g
+
+function renderMentions(text: string): React.ReactNode {
+  const parts = text.split(MENTION_RE)
+  return parts.map((part, index) =>
+    /^@[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}$/.test(part) ? (
+      <span key={index} className="font-medium text-primary">
+        {part}
+      </span>
+    ) : (
+      part
+    )
+  )
+}
 
 export function TaskComments({
   taskId,
@@ -253,7 +268,7 @@ export function TaskComments({
                 </div>
               ) : (
                 <>
-                  <p className="whitespace-pre-wrap text-sm">{comment.content}</p>
+                  <p className="whitespace-pre-wrap text-sm">{renderMentions(comment.content)}</p>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">
                       {new Date(comment.created_at).toLocaleString()}

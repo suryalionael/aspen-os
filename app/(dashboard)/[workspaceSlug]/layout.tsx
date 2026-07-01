@@ -70,6 +70,7 @@ export default async function WorkspaceLayout({
       </ProjectSidebar>
       <CommandPalette
         workspaceSlug={workspace.slug}
+        workspaceId={workspace.id}
         projects={projectsWithFavorite}
       />
     </>

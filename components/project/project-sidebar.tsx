@@ -113,6 +113,13 @@ export function ProjectSidebar({
           >
             Calendar
           </Link>
+          <Link
+            href={`/${workspaceSlug}/notes`}
+            onClick={closeDrawer}
+            className="rounded-md px-2 py-1.5 text-sm hover:bg-secondary"
+          >
+            Notes
+          </Link>
         </div>
 
         {isAdminOrOwner && (

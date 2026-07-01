@@ -234,6 +234,57 @@ export type Database = {
           },
         ]
       }
+      notes: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string | null
+          id: string
+          project_id: string | null
+          title: string
+          type: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          project_id?: string | null
+          title: string
+          type?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          project_id?: string | null
+          title?: string
+          type?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notes_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string

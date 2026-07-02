@@ -69,7 +69,8 @@ test("search, filter, and sort narrow and reorder the board without losing data"
   // --- Priority filter narrows to just the urgent task ---
   await page.getByLabel("Filter by priority").selectOption("urgent")
   await expect(page.getByTestId("task-card")).toHaveCount(1)
-  await expect(page.getByText("Beta task")).toBeVisible()
+  // Scope to task-card to avoid matching the lingering "Task updated: Beta task" toast.
+  await expect(page.getByTestId("task-card").getByText("Beta task")).toBeVisible()
 
   await page.getByLabel("Filter by priority").selectOption("")
   await expect(page.getByTestId("task-card")).toHaveCount(3)

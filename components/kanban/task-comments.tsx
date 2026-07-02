@@ -236,7 +236,7 @@ export function TaskComments({
         </p>
       )}
       {comments.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No comments yet</p>
+        <p className="text-sm text-muted-foreground">Be the first to comment.</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {comments.map((comment) => (

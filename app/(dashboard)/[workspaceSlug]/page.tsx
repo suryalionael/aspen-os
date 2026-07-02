@@ -6,6 +6,7 @@ import { getWorkspaceBySlug } from "@/lib/data/workspace"
 import { getWorkspaceNotes } from "@/lib/actions/notes"
 import { formatDateTime } from "@/lib/utils/format-date"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 
 const PRIORITY_LABELS: Record<string, string> = {
   low: "Low",
@@ -155,7 +156,7 @@ export default async function WorkspaceHomePage({
   // task_assignees join table (added in Sprint 4 Priority 9). Run both
   // queries in parallel then merge+deduplicate so users see all tasks
   // regardless of which assignment path was used.
-  const [assignedLegacyResult, assignedViaJoinResult, dueTodayResult, upcomingResult, favoritesResult, taskIdsResult, notesResult] =
+  const [assignedLegacyResult, assignedViaJoinResult, dueTodayResult, upcomingResult, favoritesResult, taskIdsResult, notesResult, todayMeetingsResult] =
     await Promise.all([
       supabase
         .from("tasks")
@@ -195,8 +196,15 @@ export default async function WorkspaceHomePage({
         .select("project_id")
         .eq("user_id", user.id)
         .in("project_id", projectIds),
-      supabase.from("tasks").select("id, title").in("project_id", projectIds),
+      supabase.from("tasks").select("id, title, project_id").in("project_id", projectIds),
       getWorkspaceNotes(workspace.id),
+      supabase
+        .from("meetings")
+        .select("id, title, start_time, end_time, project_id")
+        .eq("workspace_id", workspace.id)
+        .gte("start_time", today + "T00:00:00.000Z")
+        .lt("start_time", new Date(Date.now() + 86400000).toISOString().slice(0, 10) + "T00:00:00.000Z")
+        .order("start_time", { ascending: true }),
     ])
 
   // Merge legacy + join-table assigned tasks, deduplicate by id, exclude done.
@@ -232,10 +240,11 @@ export default async function WorkspaceHomePage({
     .filter((note) => note.type === "announcement")
     .slice(0, 3)
 
-  const taskTitleById = new Map(
-    (taskIdsResult.data ?? []).map((task) => [task.id, task.title])
+  const taskById = new Map(
+    (taskIdsResult.data ?? []).map((task) => [task.id, { title: task.title, project_id: task.project_id }])
   )
   const allTaskIds = (taskIdsResult.data ?? []).map((task) => task.id)
+  const todayMeetings = todayMeetingsResult.data ?? []
 
   // activity needs allTaskIds (computed above); members only needs workspace.id
   // (known from the start) — run both in parallel rather than sequentially.
@@ -291,6 +300,16 @@ export default async function WorkspaceHomePage({
         </Card>
       )}
 
+      {/* Quick actions */}
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" asChild>
+          <Link href={`/${workspaceSlug}/notes`}>+ Note</Link>
+        </Button>
+        <Button size="sm" variant="outline" asChild>
+          <Link href={`/${workspaceSlug}/calendar`}>+ Meeting</Link>
+        </Button>
+      </div>
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -335,6 +354,35 @@ export default async function WorkspaceHomePage({
             )}
           </CardContent>
         </Card>
+
+        {todayMeetings.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Today&apos;s meetings</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="flex flex-col gap-1">
+                {todayMeetings.map((meeting) => {
+                  const startTime = new Date(meeting.start_time).toLocaleTimeString(undefined, {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })
+                  return (
+                    <li key={meeting.id}>
+                      <Link
+                        href={`/${workspaceSlug}/calendar`}
+                        className="-mx-2 flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-secondary/50"
+                      >
+                        <span className="shrink-0 text-xs text-muted-foreground">{startTime}</span>
+                        <span className="min-w-0 flex-1 truncate text-sm">{meeting.title}</span>
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
@@ -394,11 +442,23 @@ export default async function WorkspaceHomePage({
                   const actorEmail = entry.actor_id
                     ? emailByUserId.get(entry.actor_id) ?? "Someone"
                     : "Someone"
-                  const taskTitle = taskTitleById.get(entry.task_id) ?? "a task"
+                  const taskInfo = taskById.get(entry.task_id)
+                  const taskTitle = taskInfo?.title ?? "a task"
+                  const taskProjectId = taskInfo?.project_id
                   return (
                     <li key={entry.id}>
                       <span className="text-foreground">{actorEmail}</span> {verb}{" "}
-                      <span className="text-foreground">&quot;{taskTitle}&quot;</span> ·{" "}
+                      {taskProjectId ? (
+                        <Link
+                          href={`/${workspaceSlug}/${taskProjectId}?task=${entry.task_id}`}
+                          className="font-medium text-foreground hover:underline"
+                        >
+                          &quot;{taskTitle}&quot;
+                        </Link>
+                      ) : (
+                        <span className="text-foreground">&quot;{taskTitle}&quot;</span>
+                      )}
+                      {" · "}
                       {formatDateTime(entry.created_at, timezone)}
                     </li>
                   )

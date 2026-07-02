@@ -6,6 +6,7 @@ export default defineConfig({
   retries: 0,
   reporter: "list",
   timeout: 90_000, // per-test default; individual long tests override via test.setTimeout
+  expect: { timeout: 10_000 }, // CI is slower; 5s default was too tight for async UI updates
   use: {
     baseURL: "http://localhost:3000",
     trace: "retain-on-failure",

@@ -79,7 +79,9 @@ test("edit, archive/restore, and delete all work from the task detail dialog", a
   const archivePersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Archive" }).click()
   await archivePersisted
-  await expect(page.getByText("Renamed task")).toHaveCount(0)
+  // Scope to task-card to avoid matching the "Task updated: Renamed task"
+  // toast that the board's real-time subscription fires after archive.
+  await expect(page.getByTestId("task-card").getByText("Renamed task")).toHaveCount(0)
 
   // --- Restore from the Archived dialog and confirm it reappears ---
   await page.getByRole("button", { name: "Archived", exact: true }).click()

@@ -56,7 +56,9 @@ test("search, filter, and sort narrow and reorder the board without losing data"
   // --- Search narrows to a single matching card ---
   await page.getByLabel("Search tasks").fill("Beta")
   await expect(page.getByTestId("task-card")).toHaveCount(1)
-  await expect(page.getByText("Beta task")).toBeVisible()
+  // Scope to task-card: the toast "Task updated: Beta task" can still be
+  // visible from the priority save, causing strict-mode violation.
+  await expect(page.getByTestId("task-card").getByText("Beta task")).toBeVisible()
   await expect(
     page.getByText("Drag and drop is disabled", { exact: false })
   ).toBeVisible()

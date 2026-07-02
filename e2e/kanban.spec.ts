@@ -105,6 +105,8 @@ test("drag-and-drop and keyboard fallback both move a task, and both persist aft
 
   // --- AC-5: reload and confirm both moves persisted in the database ---
   await page.reload()
+  // Wait for the board to finish all data fetches before checking positions.
+  await page.waitForLoadState("networkidle", { timeout: 30_000 })
   await expect(
     page.getByTestId("column-in_progress").getByText("Drag me to In Progress")
   ).toBeVisible()

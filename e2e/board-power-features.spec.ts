@@ -21,7 +21,7 @@ test("overdue indicator, newest/oldest/assignee sort, description search, and ke
   // close to Playwright's 30s default even alone (~22-25s) — confirmed
   // directly exceeding it once the full suite grew long enough to add
   // load. A real timeout need, same fix as notifications.spec.ts.
-  test.setTimeout(120_000)
+  test.setTimeout(180_000)
 
   const unique = Date.now()
   const email = `e2e-power-${unique}@example.com`

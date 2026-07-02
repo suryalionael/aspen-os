@@ -17,9 +17,12 @@ export function getSupabaseEnv() {
     )
   }
 
-  // Strip trailing slash: a trailing slash causes @supabase/auth-js to
-  // construct paths like //auth/v1 which Supabase rejects as invalid.
-  return { url: url.replace(/\/+$/, ""), anonKey }
+  // Normalize to origin only: supabase-js appends /auth/v1 etc. to this URL.
+  // If it contains a path (e.g. /rest/v1) or trailing slash the constructed
+  // endpoints become invalid. URL.origin strips any path/search/fragment.
+  let normalizedUrl = url
+  try { normalizedUrl = new URL(url).origin } catch {}
+  return { url: normalizedUrl, anonKey }
 }
 
 // Server-only. Never read this from a Client Component — the lack of a

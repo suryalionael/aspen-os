@@ -15,12 +15,20 @@ if (!globalThis.WebSocket) {
   globalThis.WebSocket = ws
 }
 
-// Normalize NEXT_PUBLIC_SUPABASE_URL: remove a trailing slash if present.
-// A trailing slash causes @supabase/auth-js to construct paths like
-// `//auth/v1` which the server rejects as "Invalid path specified in
-// request URL". Stripping it here, before any test script reads the var,
-// covers all 7 db-test scripts without touching each one individually.
-if (process.env.NEXT_PUBLIC_SUPABASE_URL?.endsWith("/")) {
-  process.env.NEXT_PUBLIC_SUPABASE_URL =
-    process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/+$/, "")
+// Normalize NEXT_PUBLIC_SUPABASE_URL to just the origin (scheme + host).
+// @supabase/supabase-js appends /auth/v1, /rest/v1 etc. to whatever URL
+// is provided. If the secret was stored with a path component (e.g.
+// https://xxx.supabase.co/rest/v1) or a trailing slash, the constructed
+// endpoint becomes invalid and GoTrue returns "Invalid path specified in
+// request URL". Using URL.origin strips any path, search, or fragment,
+// leaving exactly https://xxx.supabase.co — the format supabase-js expects.
+if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  try {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = new URL(
+      process.env.NEXT_PUBLIC_SUPABASE_URL
+    ).origin
+  } catch {
+    // If the URL is genuinely malformed (not parseable) leave it as-is;
+    // the subsequent missing-var check in each test script will catch it.
+  }
 }

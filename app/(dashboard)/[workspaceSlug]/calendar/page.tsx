@@ -36,6 +36,7 @@ export default async function WorkspaceCalendarPage({
           .in("project_id", projectIds)
           .not("due_date", "is", null)
           .is("archived_at", null)
+          .neq("status", "done")
       : { data: [] }
 
   const [meetingsResult, membersResult] = await Promise.all([

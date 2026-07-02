@@ -129,6 +129,7 @@ export default async function WorkspaceHomePage({
         .in("project_id", projectIds)
         .eq("assignee_id", user.id)
         .is("archived_at", null)
+        .neq("status", "done")
         .order("due_date", { ascending: true, nullsFirst: false })
         .limit(10),
       supabase
@@ -137,6 +138,7 @@ export default async function WorkspaceHomePage({
         .in("project_id", projectIds)
         .eq("due_date", today)
         .is("archived_at", null)
+        .neq("status", "done")
         .order("priority", { ascending: true })
         .limit(10),
       supabase
@@ -146,6 +148,7 @@ export default async function WorkspaceHomePage({
         .gt("due_date", today)
         .lte("due_date", weekAhead)
         .is("archived_at", null)
+        .neq("status", "done")
         .order("due_date", { ascending: true })
         .limit(10),
       supabase

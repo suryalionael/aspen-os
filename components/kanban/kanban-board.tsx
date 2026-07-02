@@ -414,7 +414,7 @@ export function KanbanBoard({
 
   const todayTasks = useMemo(() => {
     const todayKey = toDateKey(new Date())
-    return allTasks.filter((task) => task.due_date === todayKey)
+    return allTasks.filter((task) => task.due_date === todayKey && task.status !== "done")
   }, [allTasks])
 
   const weekTasks = useMemo(() => {
@@ -425,7 +425,10 @@ export function KanbanBoard({
     const weekFromNowKey = toDateKey(weekFromNow)
     return allTasks.filter(
       (task) =>
-        task.due_date !== null && task.due_date >= todayKey && task.due_date <= weekFromNowKey
+        task.status !== "done" &&
+        task.due_date !== null &&
+        task.due_date >= todayKey &&
+        task.due_date <= weekFromNowKey
     )
   }, [allTasks])
 

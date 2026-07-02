@@ -33,6 +33,7 @@ export async function createWorkspace(
     })
 
     if (!error && data) {
+      await seedOnboarding(supabase, data.id, data.slug)
       redirect(`/${data.slug}`)
     }
 
@@ -49,6 +50,50 @@ export async function createWorkspace(
     error:
       "Could not generate a unique workspace URL after several attempts. Please try a different name.",
   }
+}
+
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>
+
+// Seeded once per new workspace so the user lands on a populated board
+// rather than a blank slate. Tasks are lightweight placeholders they can
+// rename or delete immediately — not tutorials that block progress.
+async function seedOnboarding(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  workspaceSlug: string
+): Promise<void> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return
+
+  const { data: project } = await supabase
+    .from("projects")
+    .insert({
+      workspace_id: workspaceId,
+      name: "Getting Started",
+      description: "A sample project to help you explore Aspen OS. Rename or delete it whenever you're ready.",
+      created_by: user.id,
+    })
+    .select("id")
+    .single()
+
+  if (!project) return
+
+  const sampleTasks = [
+    { title: "Invite your team members", status: "todo", priority: "high", position: 1 },
+    { title: "Create your first real project", status: "todo", priority: "medium", position: 2 },
+    { title: "Set up your workspace profile", status: "in_progress", priority: "low", position: 3 },
+    { title: "Explore the Calendar and Notes tabs", status: "backlog", priority: null, position: 4 },
+  ]
+
+  await supabase.from("tasks").insert(
+    sampleTasks.map((task) => ({
+      project_id: project.id,
+      created_by: user.id,
+      ...task,
+    }))
+  )
 }
 
 export type WorkspaceMember = {

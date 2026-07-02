@@ -100,15 +100,17 @@ export default async function WorkspaceHomePage({
 
   if (!user || projectIds.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center p-6 text-center">
-        <p className="text-sm text-muted-foreground">
-          <span className="hidden md:inline">
-            Select a project from the sidebar, or create a new one to get
-            started.
-          </span>
-          <span className="md:hidden">
-            Tap the menu button below to create your first project.
-          </span>
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
+        <span className="text-5xl">🌱</span>
+        <div className="flex flex-col gap-1">
+          <p className="font-semibold text-foreground">Welcome to {workspace.name}</p>
+          <p className="max-w-xs text-sm text-muted-foreground">
+            Create your first project to start organizing tasks, setting due dates, and collaborating with your team.
+          </p>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          <span className="hidden md:inline">Click <strong>New</strong> in the sidebar to create a project.</span>
+          <span className="md:hidden">Tap the menu button to create your first project.</span>
         </p>
       </div>
     )

@@ -3,6 +3,7 @@
 import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
+import { EmptyState } from "@/components/ui/empty-state"
 import { NoteDialog } from "@/components/notes/note-dialog"
 import { formatDateTime } from "@/lib/utils/format-date"
 import type { Note, NoteType } from "@/lib/actions/notes"
@@ -89,7 +90,16 @@ export function NotesClient({
       </div>
 
       {visibleNotes.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No notes yet.</p>
+        <EmptyState
+          icon="📝"
+          title={filter === "all" ? "No notes yet" : `No ${TYPE_LABELS[filter as NoteType] ?? filter.toLowerCase()}s yet`}
+          description="Capture documents, quick notes, meeting notes, and announcements for your team."
+          action={
+            <Button size="sm" onClick={handleCreate}>
+              Create a note
+            </Button>
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {visibleNotes.map((note) => (

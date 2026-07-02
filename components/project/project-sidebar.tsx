@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { Menu, X } from "lucide-react"
 
 import { ProjectCreateDialog } from "@/components/project/project-create-dialog"
@@ -18,10 +19,12 @@ type Project = { id: string; name: string; isFavorite: boolean }
 function ProjectLink({
   project,
   workspaceSlug,
+  isActive,
   onNavigate,
 }: {
   project: Project
   workspaceSlug: string
+  isActive: boolean
   onNavigate: () => void
 }) {
   return (
@@ -29,7 +32,11 @@ function ProjectLink({
       <Link
         href={`/${workspaceSlug}/${project.id}`}
         onClick={onNavigate}
-        className="flex-1 rounded-md px-2 py-1.5 text-sm hover:bg-secondary"
+        className={`flex-1 rounded-md px-2 py-1.5 text-sm transition-colors ${
+          isActive
+            ? "bg-secondary font-medium text-foreground"
+            : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+        }`}
       >
         {project.name}
       </Link>
@@ -60,9 +67,19 @@ export function ProjectSidebar({
   // by a toggle button that only renders below md — at md and up it's
   // back to the original always-visible layout.
   const [open, setOpen] = useState(false)
+  const pathname = usePathname()
   const favorites = projects.filter((project) => project.isFavorite)
   const isAdminOrOwner = currentUserRole === "owner" || currentUserRole === "admin"
   const closeDrawer = () => setOpen(false)
+
+  function navLinkClass(href: string) {
+    const isActive = pathname === href || pathname.startsWith(href + "/")
+    return `rounded-md px-2 py-1.5 text-sm transition-colors ${
+      isActive
+        ? "bg-secondary font-medium text-foreground"
+        : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+    }`
+  }
 
   return (
     <div className="flex flex-1">
@@ -109,21 +126,21 @@ export function ProjectSidebar({
           <Link
             href={`/${workspaceSlug}/calendar`}
             onClick={closeDrawer}
-            className="rounded-md px-2 py-1.5 text-sm hover:bg-secondary"
+            className={navLinkClass(`/${workspaceSlug}/calendar`)}
           >
             Calendar
           </Link>
           <Link
             href={`/${workspaceSlug}/notes`}
             onClick={closeDrawer}
-            className="rounded-md px-2 py-1.5 text-sm hover:bg-secondary"
+            className={navLinkClass(`/${workspaceSlug}/notes`)}
           >
             Notes
           </Link>
           <Link
             href={`/${workspaceSlug}/activity`}
             onClick={closeDrawer}
-            className="rounded-md px-2 py-1.5 text-sm hover:bg-secondary"
+            className={navLinkClass(`/${workspaceSlug}/activity`)}
           >
             Activity
           </Link>
@@ -147,6 +164,7 @@ export function ProjectSidebar({
                   key={project.id}
                   project={project}
                   workspaceSlug={workspaceSlug}
+                  isActive={pathname.startsWith(`/${workspaceSlug}/${project.id}`)}
                   onNavigate={closeDrawer}
                 />
               ))}
@@ -176,6 +194,7 @@ export function ProjectSidebar({
                 key={project.id}
                 project={project}
                 workspaceSlug={workspaceSlug}
+                isActive={pathname.startsWith(`/${workspaceSlug}/${project.id}`)}
                 onNavigate={closeDrawer}
               />
             ))}

@@ -29,6 +29,8 @@ const ACTIVITY_VERBS: Record<string, string> = {
   commented: "commented on",
   attachment_added: "added an attachment to",
   attachment_removed: "removed an attachment from",
+  assignee_added: "assigned someone to",
+  assignee_removed: "unassigned someone from",
 }
 
 type DashboardTask = {
@@ -149,7 +151,11 @@ export default async function WorkspaceHomePage({
     .toISOString()
     .slice(0, 10)
 
-  const [assignedResult, dueTodayResult, upcomingResult, favoritesResult, taskIdsResult, notesResult] =
+  // "Assigned to you" needs both the legacy assignee_id column AND the
+  // task_assignees join table (added in Sprint 4 Priority 9). Run both
+  // queries in parallel then merge+deduplicate so users see all tasks
+  // regardless of which assignment path was used.
+  const [assignedLegacyResult, assignedViaJoinResult, dueTodayResult, upcomingResult, favoritesResult, taskIdsResult, notesResult] =
     await Promise.all([
       supabase
         .from("tasks")
@@ -160,6 +166,11 @@ export default async function WorkspaceHomePage({
         .neq("status", "done")
         .order("due_date", { ascending: true, nullsFirst: false })
         .limit(10),
+      supabase
+        .from("task_assignees")
+        .select("task_id, tasks!inner(id, title, project_id, due_date, priority, status, archived_at)")
+        .eq("user_id", user.id)
+        .in("tasks.project_id", projectIds),
       supabase
         .from("tasks")
         .select("id, title, project_id, due_date, priority")
@@ -188,6 +199,33 @@ export default async function WorkspaceHomePage({
       getWorkspaceNotes(workspace.id),
     ])
 
+  // Merge legacy + join-table assigned tasks, deduplicate by id, exclude done.
+  const assignedSeen = new Set<string>()
+  const assignedMerged: DashboardTask[] = []
+  for (const task of assignedLegacyResult.data ?? []) {
+    if (!assignedSeen.has(task.id)) {
+      assignedSeen.add(task.id)
+      assignedMerged.push(task)
+    }
+  }
+  for (const row of assignedViaJoinResult.data ?? []) {
+    const task = row.tasks as unknown as DashboardTask & { status: string; archived_at: string | null }
+    if (
+      !assignedSeen.has(task.id) &&
+      task.status !== "done" &&
+      task.archived_at === null
+    ) {
+      assignedSeen.add(task.id)
+      assignedMerged.push(task)
+    }
+  }
+  assignedMerged.sort((a, b) => {
+    if (!a.due_date && !b.due_date) return 0
+    if (!a.due_date) return 1
+    if (!b.due_date) return -1
+    return a.due_date < b.due_date ? -1 : 1
+  })
+
   const announcements = (
     "success" in notesResult ? notesResult.notes : []
   )
@@ -199,19 +237,19 @@ export default async function WorkspaceHomePage({
   )
   const allTaskIds = (taskIdsResult.data ?? []).map((task) => task.id)
 
-  const { data: activity } =
+  // activity needs allTaskIds (computed above); members only needs workspace.id
+  // (known from the start) — run both in parallel rather than sequentially.
+  const [{ data: activity }, { data: members }] = await Promise.all([
     allTaskIds.length > 0
-      ? await supabase
+      ? supabase
           .from("task_activity")
           .select("id, event_type, metadata, created_at, actor_id, task_id")
           .in("task_id", allTaskIds)
           .order("created_at", { ascending: false })
           .limit(10)
-      : { data: [] }
-
-  const { data: members } = await supabase.rpc("get_workspace_members_with_email", {
-    p_workspace_id: workspace.id,
-  })
+      : Promise.resolve({ data: [] as { id: string; event_type: string; metadata: Record<string, unknown> | null; created_at: string; actor_id: string | null; task_id: string }[] }),
+    supabase.rpc("get_workspace_members_with_email", { p_workspace_id: workspace.id }),
+  ])
   const emailByUserId = new Map<string, string>(
     (members ?? []).map((member: { user_id: string; email: string }) => [
       member.user_id,
@@ -259,9 +297,9 @@ export default async function WorkspaceHomePage({
             <CardTitle className="text-base">Assigned to you</CardTitle>
           </CardHeader>
           <CardContent>
-            {assignedResult.data?.length ? (
+            {assignedMerged.length ? (
               <ul className="flex flex-col gap-1">
-                {assignedResult.data.map((task) => (
+                {assignedMerged.slice(0, 10).map((task) => (
                   <TaskRow
                     key={task.id}
                     task={task}

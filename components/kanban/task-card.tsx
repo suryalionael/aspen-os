@@ -194,7 +194,7 @@ function TaskCardBody({
 }
 
 const CARD_CLASS =
-  "flex flex-col gap-2 rounded-xl border border-border/60 bg-card p-3.5 text-sm shadow-sm transition-shadow hover:shadow-md"
+  "flex flex-col gap-2 rounded-xl border border-border/60 bg-card p-3.5 text-sm shadow-sm transition-all duration-150 hover:shadow-md hover:border-border"
 
 // Memoized — a Kanban board re-renders all its cards on any task mutation
 // (tasksByStatus is one object covering every column), so without this

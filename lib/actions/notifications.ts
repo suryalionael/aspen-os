@@ -177,16 +177,37 @@ export async function checkDueTodayNotifications(
   const projectIds = (projects ?? []).map((project) => project.id)
   if (projectIds.length === 0) return { success: true }
 
-  const { data: dueTodayTasks } = await supabase
-    .from("tasks")
-    .select("id, title, project_id")
-    .in("project_id", projectIds)
-    .eq("assignee_id", user.id)
-    .eq("due_date", today)
-    .is("archived_at", null)
-    .neq("status", "done")
+  const [{ data: legacyTasks }, { data: joinTasks }] = await Promise.all([
+    supabase
+      .from("tasks")
+      .select("id, title, project_id")
+      .in("project_id", projectIds)
+      .eq("assignee_id", user.id)
+      .eq("due_date", today)
+      .is("archived_at", null)
+      .neq("status", "done"),
+    supabase
+      .from("task_assignees")
+      .select("task_id, tasks!inner(id, title, project_id, status, archived_at)")
+      .eq("user_id", user.id)
+      .eq("tasks.due_date", today),
+  ])
 
-  for (const task of dueTodayTasks ?? []) {
+  const seen = new Set<string>()
+  const dueTodayTasks: { id: string; title: string; project_id: string }[] = []
+  for (const task of legacyTasks ?? []) {
+    seen.add(task.id)
+    dueTodayTasks.push(task)
+  }
+  for (const row of joinTasks ?? []) {
+    const t = row.tasks as unknown as { id: string; title: string; project_id: string; status: string; archived_at: string | null }
+    if (!seen.has(t.id) && t.status !== "done" && !t.archived_at) {
+      seen.add(t.id)
+      dueTodayTasks.push({ id: t.id, title: t.title, project_id: t.project_id })
+    }
+  }
+
+  for (const task of dueTodayTasks) {
     await createNotification(supabase, {
       userId: user.id,
       actorId: "system",

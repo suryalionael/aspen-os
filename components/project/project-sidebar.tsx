@@ -72,8 +72,8 @@ export function ProjectSidebar({
   const isAdminOrOwner = currentUserRole === "owner" || currentUserRole === "admin"
   const closeDrawer = () => setOpen(false)
 
-  function navLinkClass(href: string) {
-    const isActive = pathname === href || pathname.startsWith(href + "/")
+  function navLinkClass(href: string, exact = false) {
+    const isActive = exact ? pathname === href : pathname === href || pathname.startsWith(href + "/")
     return `rounded-md px-2 py-1.5 text-sm transition-colors ${
       isActive
         ? "bg-secondary font-medium text-foreground"
@@ -123,6 +123,13 @@ export function ProjectSidebar({
             <AuditLogDialog workspaceId={workspaceId} />
             <WorkspaceMembersDialog workspaceId={workspaceId} currentUserRole={currentUserRole} />
           </div>
+          <Link
+            href={`/${workspaceSlug}`}
+            onClick={closeDrawer}
+            className={navLinkClass(`/${workspaceSlug}`, true)}
+          >
+            Home
+          </Link>
           <Link
             href={`/${workspaceSlug}/calendar`}
             onClick={closeDrawer}

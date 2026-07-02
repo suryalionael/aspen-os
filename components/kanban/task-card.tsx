@@ -1,6 +1,7 @@
 "use client"
 
 import { memo } from "react"
+import { Paperclip, MessageSquare } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 
@@ -10,10 +11,10 @@ import { formatDueDate, isOverdue } from "@/lib/utils/dates"
 import { getTaskProgress } from "@/lib/utils/task-progress"
 
 const PRIORITY_STYLES: Record<string, string> = {
-  low: "bg-secondary text-secondary-foreground",
-  medium: "bg-blue-100 text-blue-800",
-  high: "bg-amber-100 text-amber-800",
-  urgent: "bg-red-100 text-red-800",
+  low: "bg-secondary/80 text-muted-foreground",
+  medium: "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300",
+  high: "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
+  urgent: "bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-300",
 }
 
 const PRIORITY_LABELS: Record<string, string> = {
@@ -108,9 +109,13 @@ function TaskCardBody({
         <span
           {...dragHandleProps}
           onClick={() => onOpen(id)}
-          className="flex-1 cursor-grab select-none"
+          className="flex-1 cursor-grab select-none leading-snug"
         >
-          {title}
+          {status === "done" ? (
+            <span className="line-through text-muted-foreground/70">{title}</span>
+          ) : (
+            title
+          )}
         </span>
         <TaskMoveControl status={status} onMove={(newStatus) => onMove(id, newStatus)} />
       </div>
@@ -149,10 +154,16 @@ function TaskCardBody({
         attachmentCount > 0) && (
         <div className="flex flex-wrap items-center gap-2">
           {commentCount > 0 && (
-            <span className="text-xs text-muted-foreground">💬 {commentCount}</span>
+            <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+              <MessageSquare className="h-3 w-3" />
+              {commentCount}
+            </span>
           )}
           {attachmentCount > 0 && (
-            <span className="text-xs text-muted-foreground">📎 {attachmentCount}</span>
+            <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+              <Paperclip className="h-3 w-3" />
+              {attachmentCount}
+            </span>
           )}
           {priority && (
             <span

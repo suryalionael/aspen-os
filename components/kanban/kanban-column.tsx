@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import { useDroppable } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 
@@ -14,7 +15,7 @@ const COLUMN_LABELS: Record<string, string> = {
   done: "Done",
 }
 
-export function KanbanColumn({
+export const KanbanColumn = memo(function KanbanColumn({
   status,
   projectId,
   tasks,
@@ -102,4 +103,4 @@ export function KanbanColumn({
       </SortableContext>
     </div>
   )
-}
+})

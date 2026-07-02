@@ -329,9 +329,11 @@ export async function editTask(
       { field: "priority", from: previousTask.priority, to: updatedTask.priority },
     ].filter((change) => change.from !== change.to)
 
-    for (const change of changes) {
-      await logActivity(supabase, taskId, user.id, "edited", change)
-    }
+    // Parallelize activity logs — one insert per changed field was sequential;
+    // batching them reduces N DB round-trips to 1 async batch.
+    await Promise.all(
+      changes.map((change) => logActivity(supabase, taskId, user.id, "edited", change))
+    )
 
     if (changes.length > 0) {
       const workspaceId = await getWorkspaceIdForProject(supabase, previousTask.project_id)

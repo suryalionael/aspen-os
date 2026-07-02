@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import dynamic from "next/dynamic"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
@@ -130,6 +130,10 @@ export function KanbanBoard({
 
   const [, startTransition] = useTransition()
   const [searchQuery, setSearchQuery] = useState("")
+  // useDeferredValue keeps the search input instantly responsive — the
+  // expensive task filtering (which re-renders every TaskCard) is deferred
+  // until React's scheduler has capacity, preventing keystrokes from blocking.
+  const deferredSearchQuery = useDeferredValue(searchQuery)
   const [priorityFilter, setPriorityFilter] = useState("")
   const [labelFilter, setLabelFilter] = useState("")
   const [sortMode, setSortMode] = useState<SortMode>("manual")
@@ -429,7 +433,7 @@ export function KanbanBoard({
   const isViewModified = isFiltered || sortMode !== "manual"
 
   const visibleTasksByStatus = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase()
+    const query = deferredSearchQuery.trim().toLowerCase()
     const next: TasksByStatus = { backlog: [], todo: [], in_progress: [], done: [] }
 
     for (const status of STATUSES) {
@@ -480,7 +484,7 @@ export function KanbanBoard({
     }
 
     return next
-  }, [tasksByStatus, searchQuery, priorityFilter, labelFilter, sortMode, assigneeEmailById])
+  }, [tasksByStatus, deferredSearchQuery, priorityFilter, labelFilter, sortMode, assigneeEmailById])
 
   // A small activation distance keeps the "move to" select and ordinary
   // clicks from being swallowed by an accidental drag.

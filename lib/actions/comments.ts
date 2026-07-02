@@ -106,23 +106,26 @@ export async function addComment(
     const { data: members } = await supabase.rpc("get_workspace_members_with_email", {
       p_workspace_id: context.workspaceId,
     })
-    for (const member of members ?? []) {
-      if (
-        member.user_id !== user.id &&
-        !recipients.has(member.user_id) &&
-        trimmed.includes(member.email)
-      ) {
-        await createNotification(supabase, {
-          userId: member.user_id,
-          actorId: user.id,
-          workspaceId: context.workspaceId,
-          projectId: context.projectId,
-          taskId,
-          type: "mentioned",
-          message: `You were mentioned on "${context.title}"`,
-        })
-      }
-    }
+    await Promise.all(
+      (members ?? [])
+        .filter(
+          (member: { user_id: string; email: string }) =>
+            member.user_id !== user.id &&
+            !recipients.has(member.user_id) &&
+            trimmed.includes(member.email)
+        )
+        .map((member: { user_id: string; email: string }) =>
+          createNotification(supabase, {
+            userId: member.user_id,
+            actorId: user.id,
+            workspaceId: context.workspaceId,
+            projectId: context.projectId,
+            taskId,
+            type: "mentioned",
+            message: `You were mentioned on "${context.title}"`,
+          })
+        )
+    )
   }
 
   revalidatePath("/", "layout")

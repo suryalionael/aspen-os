@@ -17,7 +17,9 @@ export function getSupabaseEnv() {
     )
   }
 
-  return { url, anonKey }
+  // Strip trailing slash: a trailing slash causes @supabase/auth-js to
+  // construct paths like //auth/v1 which Supabase rejects as invalid.
+  return { url: url.replace(/\/+$/, ""), anonKey }
 }
 
 // Server-only. Never read this from a Client Component — the lack of a

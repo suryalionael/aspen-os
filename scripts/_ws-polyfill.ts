@@ -14,3 +14,13 @@ if (!globalThis.WebSocket) {
   // @ts-expect-error ws's WebSocket type is narrower than the DOM WebSocket
   globalThis.WebSocket = ws
 }
+
+// Normalize NEXT_PUBLIC_SUPABASE_URL: remove a trailing slash if present.
+// A trailing slash causes @supabase/auth-js to construct paths like
+// `//auth/v1` which the server rejects as "Invalid path specified in
+// request URL". Stripping it here, before any test script reads the var,
+// covers all 7 db-test scripts without touching each one individually.
+if (process.env.NEXT_PUBLIC_SUPABASE_URL?.endsWith("/")) {
+  process.env.NEXT_PUBLIC_SUPABASE_URL =
+    process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/+$/, "")
+}

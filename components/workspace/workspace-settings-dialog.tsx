@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState, useMemo, useRef, useState, useTransition } from "react"
+import { useActionState, useMemo, useState, useTransition } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 
@@ -61,20 +61,40 @@ export function WorkspaceSettingsDialog({
   const [error, setError] = useState<string | null>(null)
   const [, startTransition] = useTransition()
   const router = useRouter()
-  const logoFormRef = useRef<HTMLFormElement>(null)
+  const [logoError, setLogoError] = useState<string | null>(null)
+  const [logoUploading, setLogoUploading] = useState(false)
 
   const [settingsState, settingsAction, settingsPending] = useActionState(
     updateWorkspaceSettings,
     undefined
   )
-  const [logoState, logoAction] = useActionState(uploadWorkspaceLogo, undefined)
 
   const timezoneOptions = useMemo(
     () => getTimezoneOptions(workspace.defaultTimezone ?? ""),
     [workspace.defaultTimezone]
   )
 
-  const currentLogoUrl = logoState && "success" in logoState ? logoState.logoUrl : logoUrl
+  const currentLogoUrl = logoUrl
+
+  function handleLogoChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    const formData = new FormData()
+    formData.append("workspaceId", workspace.id)
+    formData.append("logo", file)
+    setLogoError(null)
+    setLogoUploading(true)
+    startTransition(async () => {
+      const result = await uploadWorkspaceLogo(undefined, formData)
+      setLogoUploading(false)
+      if (!result) return
+      if ("error" in result) {
+        setLogoError(result.error)
+      } else if ("success" in result) {
+        setLogoUrl(result.logoUrl)
+      }
+    })
+  }
 
   function handleRemoveLogo() {
     setLogoUrl(null)
@@ -155,27 +175,29 @@ export function WorkspaceSettingsDialog({
               Logo
             </div>
           )}
-          <form ref={logoFormRef} action={logoAction} className="flex flex-col gap-1.5">
-            <input type="hidden" name="workspaceId" value={workspace.id} />
+          <div className="flex flex-col gap-1.5">
             <input
               type="file"
               name="logo"
               accept="image/*"
               aria-label="Workspace logo"
-              onChange={() => logoFormRef.current?.requestSubmit()}
+              onChange={handleLogoChange}
               className="text-sm"
             />
+            {logoUploading && (
+              <span className="text-xs text-muted-foreground">Uploading…</span>
+            )}
             {currentLogoUrl && (
               <Button type="button" size="sm" variant="outline" onClick={handleRemoveLogo}>
                 Remove logo
               </Button>
             )}
-            {logoState && "error" in logoState && (
+            {logoError && (
               <p role="alert" className="text-sm text-destructive">
-                {logoState.error}
+                {logoError}
               </p>
             )}
-          </form>
+          </div>
         </div>
 
         <form action={settingsAction} className="flex flex-col gap-3 border-t border-border pt-3">

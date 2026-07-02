@@ -15,6 +15,13 @@ const COLUMN_LABELS: Record<string, string> = {
   done: "Done",
 }
 
+const COLUMN_BG: Record<string, string> = {
+  backlog: "bg-secondary/30",
+  todo: "bg-secondary/40",
+  in_progress: "bg-blue-50/50 dark:bg-blue-950/20",
+  done: "bg-emerald-50/50 dark:bg-emerald-950/20",
+}
+
 export const KanbanColumn = memo(function KanbanColumn({
   status,
   projectId,
@@ -46,17 +53,22 @@ export const KanbanColumn = memo(function KanbanColumn({
   onTaskOpen: (taskId: string) => void
   isFiltered?: boolean
 }) {
-  // The column itself is a drop target (id = status) so dropping on empty
-  // space — not just on another card — registers correctly.
-  const { setNodeRef } = useDroppable({ id: status })
+  // isOver highlights the column when a card hovers over it — improves
+  // drag feedback for users who haven't dragged to an empty column before.
+  const { setNodeRef, isOver } = useDroppable({ id: status })
 
   return (
     <div
       ref={setNodeRef}
       data-testid={`column-${status}`}
-      className="flex w-72 flex-shrink-0 flex-col gap-3 rounded-xl bg-secondary/40 p-3"
+      className={`flex w-72 flex-shrink-0 flex-col gap-3 rounded-xl p-3 transition-colors duration-150 ${
+        isOver ? "bg-primary/8 ring-1 ring-primary/20" : (COLUMN_BG[status] ?? "bg-secondary/40")
+      }`}
     >
       <h3 className="flex items-center gap-2 px-1 text-sm font-semibold tracking-tight">
+        {status === "done" && (
+          <span className="text-emerald-600 dark:text-emerald-400">✓</span>
+        )}
         {COLUMN_LABELS[status] ?? status}
         <span className="rounded-full bg-secondary px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
           {tasks.length}

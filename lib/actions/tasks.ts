@@ -84,9 +84,10 @@ export async function createTask(
     return { error: error?.message ?? "Could not create task." }
   }
 
-  await logActivity(supabase, newTask.id, user.id, "created")
-
-  const workspaceId = await getWorkspaceIdForProject(supabase, projectId)
+  const [, workspaceId] = await Promise.all([
+    logActivity(supabase, newTask.id, user.id, "created"),
+    getWorkspaceIdForProject(supabase, projectId),
+  ])
   if (workspaceId) {
     await logAuditEvent(supabase, {
       workspaceId,
@@ -215,17 +216,12 @@ export async function moveTask(input: MoveTaskInput): Promise<MoveTaskResult> {
   }
 
   if (user) {
-    await logActivity(supabase, input.taskId, user.id, "moved", {
-      to: input.status,
-    })
-
-    const workspaceId = await getWorkspaceIdForProject(supabase, input.projectId)
+    const [, workspaceId, { data: movedTask }] = await Promise.all([
+      logActivity(supabase, input.taskId, user.id, "moved", { to: input.status }),
+      getWorkspaceIdForProject(supabase, input.projectId),
+      supabase.from("tasks").select("title").eq("id", input.taskId).maybeSingle(),
+    ])
     if (workspaceId) {
-      const { data: movedTask } = await supabase
-        .from("tasks")
-        .select("title")
-        .eq("id", input.taskId)
-        .maybeSingle()
       await logAuditEvent(supabase, {
         workspaceId,
         actorId: user.id,
@@ -329,23 +325,25 @@ export async function editTask(
       { field: "priority", from: previousTask.priority, to: updatedTask.priority },
     ].filter((change) => change.from !== change.to)
 
-    // Parallelize activity logs — one insert per changed field was sequential;
-    // batching them reduces N DB round-trips to 1 async batch.
-    await Promise.all(
-      changes.map((change) => logActivity(supabase, taskId, user.id, "edited", change))
-    )
+    // Run activity logs AND workspace ID lookup in parallel — workspace ID
+    // doesn't depend on the activity log inserts.
+    const [, workspaceId] = await Promise.all([
+      Promise.all(
+        changes.map((change) => logActivity(supabase, taskId, user.id, "edited", change))
+      ),
+      changes.length > 0
+        ? getWorkspaceIdForProject(supabase, previousTask.project_id)
+        : Promise.resolve(null),
+    ])
 
-    if (changes.length > 0) {
-      const workspaceId = await getWorkspaceIdForProject(supabase, previousTask.project_id)
-      if (workspaceId) {
-        await logAuditEvent(supabase, {
-          workspaceId,
-          actorId: user.id,
-          action: "task.edited",
-          targetLabel: updatedTask.title,
-          metadata: { fields: changes.map((change) => change.field) },
-        })
-      }
+    if (changes.length > 0 && workspaceId) {
+      await logAuditEvent(supabase, {
+        workspaceId,
+        actorId: user.id,
+        action: "task.edited",
+        targetLabel: updatedTask.title,
+        metadata: { fields: changes.map((change) => change.field) },
+      })
     }
 
     // Assignment notifications now fire from assignUserToTask
@@ -368,26 +366,27 @@ export async function archiveTask(taskId: string): Promise<ArchiveTaskResult> {
     return { error: "You must be signed in to archive a task." }
   }
 
-  const context = await getTaskNotificationContext(supabase, taskId)
-
-  const { error } = await supabase
-    .from("tasks")
-    .update({ archived_at: new Date().toISOString() })
-    .eq("id", taskId)
+  const [context, { error }] = await Promise.all([
+    getTaskNotificationContext(supabase, taskId),
+    supabase.from("tasks").update({ archived_at: new Date().toISOString() }).eq("id", taskId),
+  ])
 
   if (error) {
     return { error: error.message }
   }
 
-  await logActivity(supabase, taskId, user.id, "archived")
-  if (context) {
-    await logAuditEvent(supabase, {
-      workspaceId: context.workspaceId,
-      actorId: user.id,
-      action: "task.archived",
-      targetLabel: context.title,
-    })
-  }
+  await Promise.all([
+    logActivity(supabase, taskId, user.id, "archived"),
+    context
+      ? logAuditEvent(supabase, {
+          workspaceId: context.workspaceId,
+          actorId: user.id,
+          action: "task.archived",
+          targetLabel: context.title,
+        })
+      : Promise.resolve(),
+  ])
+
   revalidatePath("/", "layout")
   return { success: true }
 }
@@ -402,26 +401,27 @@ export async function unarchiveTask(taskId: string): Promise<ArchiveTaskResult> 
     return { error: "You must be signed in to unarchive a task." }
   }
 
-  const context = await getTaskNotificationContext(supabase, taskId)
-
-  const { error } = await supabase
-    .from("tasks")
-    .update({ archived_at: null })
-    .eq("id", taskId)
+  const [context, { error }] = await Promise.all([
+    getTaskNotificationContext(supabase, taskId),
+    supabase.from("tasks").update({ archived_at: null }).eq("id", taskId),
+  ])
 
   if (error) {
     return { error: error.message }
   }
 
-  await logActivity(supabase, taskId, user.id, "unarchived")
-  if (context) {
-    await logAuditEvent(supabase, {
-      workspaceId: context.workspaceId,
-      actorId: user.id,
-      action: "task.unarchived",
-      targetLabel: context.title,
-    })
-  }
+  await Promise.all([
+    logActivity(supabase, taskId, user.id, "unarchived"),
+    context
+      ? logAuditEvent(supabase, {
+          workspaceId: context.workspaceId,
+          actorId: user.id,
+          action: "task.unarchived",
+          targetLabel: context.title,
+        })
+      : Promise.resolve(),
+  ])
+
   revalidatePath("/", "layout")
   return { success: true }
 }
@@ -438,14 +438,12 @@ export async function deleteTask(taskId: string): Promise<DeleteTaskResult> {
     return { error: "You must be signed in to delete a task." }
   }
 
-  // No task_activity entry: the row (and its task_activity history) is
-  // cascade-deleted together, so there is nothing left to attach a
-  // "deleted" entry to — this is exactly why Phase N's audit_log
-  // (migration 028) exists: it's workspace-scoped, not tied to the task
-  // by foreign key, so it survives the row it describes being gone.
-  const context = await getTaskNotificationContext(supabase, taskId)
-
-  const { error } = await supabase.from("tasks").delete().eq("id", taskId)
+  // Context fetch is parallel with delete: we need the title/workspace
+  // for the audit log, but the fetch and delete are independent queries.
+  const [context, { error }] = await Promise.all([
+    getTaskNotificationContext(supabase, taskId),
+    supabase.from("tasks").delete().eq("id", taskId),
+  ])
 
   if (error) {
     return { error: error.message }

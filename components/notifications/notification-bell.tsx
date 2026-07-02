@@ -139,7 +139,9 @@ export function NotificationBell({
         {loading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : notifications.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No notifications yet</p>
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            You&apos;re all caught up
+          </p>
         ) : (
           <>
             {unreadCount > 0 && (

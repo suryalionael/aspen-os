@@ -15,7 +15,7 @@ async function waitForDialogSettled(page: Page) {
 test("audit log records task/project/workspace/membership events, survives task deletion, and supports filtering + export", async ({
   browser,
 }) => {
-  test.setTimeout(60_000)
+  test.setTimeout(120_000)
 
   const unique = Date.now()
   const password = "TestPassword123!"

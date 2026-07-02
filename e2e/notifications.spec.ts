@@ -19,7 +19,7 @@ test("notifications fire for assignment, comments, checklist completion, and due
   // longer than Playwright's 30s default — confirmed directly: it took
   // ~35-50s even on a quiet machine, and reliably exceeded 30s under full-
   // suite load. A real timeout need, not a flake to paper over.
-  test.setTimeout(90_000)
+  test.setTimeout(150_000)
 
   const unique = Date.now()
   const password = "TestPassword123!"

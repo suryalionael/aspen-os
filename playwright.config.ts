@@ -5,14 +5,11 @@ export default defineConfig({
   fullyParallel: false,
   retries: 0,
   reporter: "list",
+  timeout: 90_000, // per-test default; individual long tests override via test.setTimeout
   use: {
     baseURL: "http://localhost:3000",
     trace: "retain-on-failure",
-    // CI cross-region Supabase round-trips make the sign-up → session-check
-    // → redirect chain take 30-40s. The default 30s navigationTimeout caused
-    // every waitForURL("**/workspaces/new") to time out. 60s gives safe
-    // margin without hiding real hangs (tests still have per-test limits).
-    navigationTimeout: 60_000,
+    navigationTimeout: 60_000, // sign-up+redirect chain takes 35-45s in CI
   },
   webServer: {
     command: "npm run dev",

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getWorkspaceBySlug } from "@/lib/data/workspace"
 import { formatDateTime } from "@/lib/utils/format-date"
 import { describeActivity } from "@/lib/utils/activity-labels"
+import { EmptyState } from "@/components/ui/empty-state"
 
 export default async function WorkspaceActivityPage({
   params,
@@ -71,7 +72,11 @@ export default async function WorkspaceActivityPage({
       <h1 className="text-lg font-semibold">Activity</h1>
 
       {!activity?.length ? (
-        <p className="text-sm text-muted-foreground">No activity yet.</p>
+        <EmptyState
+          icon="📋"
+          title="No activity yet"
+          description="Task updates, comments, and edits will appear here once your team starts working."
+        />
       ) : (
         <ul className="flex flex-col gap-2">
           {activity.map((entry) => {

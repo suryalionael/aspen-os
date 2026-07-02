@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useState } from "react"
 
 import { CalendarView } from "@/components/calendar/calendar-view"
+import { EmptyState } from "@/components/ui/empty-state"
 import { MeetingDialog } from "@/components/calendar/meeting-dialog"
 import { TaskDetailDialog } from "@/components/kanban/task-detail-dialog"
 import { updateTaskDueDate, type EditedTask } from "@/lib/actions/tasks"

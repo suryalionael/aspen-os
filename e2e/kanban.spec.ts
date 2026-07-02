@@ -75,15 +75,7 @@ test("drag-and-drop and keyboard fallback both move a task, and both persist aft
     targetBox.y + targetBox.height / 2,
     { steps: 10 }
   )
-  // kanban-board.tsx's commitMove updates the board optimistically and
-  // persists via moveTask in the background (startTransition), so the
-  // response listener must be registered before mouse.up() fires it —
-  // otherwise a reload can race the write and read back stale state.
-  const dragPersisted = page.waitForResponse(
-    (resp) => resp.request().method() === "POST"
-  )
   await page.mouse.up()
-  await dragPersisted
 
   await expect(
     page.getByTestId("column-in_progress").getByText("Drag me to In Progress")
@@ -93,19 +85,32 @@ test("drag-and-drop and keyboard fallback both move a task, and both persist aft
   const keyboardCard = page
     .getByTestId("task-card")
     .filter({ hasText: "Move me with the keyboard" })
-  const keyboardMovePersisted = page.waitForResponse(
-    (resp) => resp.request().method() === "POST"
-  )
   await keyboardCard.getByLabel("Move task to column").selectOption("done")
-  await keyboardMovePersisted
 
   await expect(
     page.getByTestId("column-done").getByText("Move me with the keyboard")
   ).toBeVisible()
 
   // --- AC-5: reload and confirm both moves persisted in the database ---
+  // commitMove calls router.refresh() *after* moveTask completes, which
+  // triggers a Next.js RSC GET. Waiting for those two RSC GETs guarantees
+  // both moveTask writes are done before the reload re-reads the database.
+  // This is more reliable than waitForResponse(POST) (too broad — can match
+  // background checkDueTodayNotifications) or waitForLoadState('networkidle')
+  // (can trigger before startTransition actually starts the fetch).
+  await page.waitForResponse(
+    (resp) =>
+      resp.request().method() === "GET" &&
+      resp.request().headers()["next-router-state-tree"] != null,
+    { timeout: 15_000 }
+  )
+  await page.waitForResponse(
+    (resp) =>
+      resp.request().method() === "GET" &&
+      resp.request().headers()["next-router-state-tree"] != null,
+    { timeout: 15_000 }
+  )
   await page.reload()
-  // Wait for the board to finish all data fetches before checking positions.
   await page.waitForLoadState("networkidle", { timeout: 30_000 })
   await expect(
     page.getByTestId("column-in_progress").getByText("Drag me to In Progress")

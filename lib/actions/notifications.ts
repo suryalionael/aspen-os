@@ -184,6 +184,7 @@ export async function checkDueTodayNotifications(
     .eq("assignee_id", user.id)
     .eq("due_date", today)
     .is("archived_at", null)
+    .neq("status", "done")
 
   for (const task of dueTodayTasks ?? []) {
     await createNotification(supabase, {

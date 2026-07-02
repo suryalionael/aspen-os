@@ -376,7 +376,8 @@ test("comments can be added, edited, and deleted", async ({ page }) => {
 
   // Board card shows the comment count without needing to reopen.
   await page.keyboard.press("Escape")
-  await expect(page.getByTestId("task-card").getByText("💬 1")).toBeVisible()
+  // Comment icon is now a Lucide SVG; verify the count text is present.
+  await expect(page.getByTestId("task-card").getByText("1")).toBeVisible()
 
   // Edit it.
   await page.getByText("Task with comments").click()

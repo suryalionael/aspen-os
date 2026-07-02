@@ -39,6 +39,26 @@ type DashboardTask = {
   priority: string | null
 }
 
+const PRIORITY_DOT: Record<string, string> = {
+  low: "bg-muted-foreground/40",
+  medium: "bg-blue-500",
+  high: "bg-amber-500",
+  urgent: "bg-red-500",
+}
+
+function formatRelativeDate(dateStr: string): string {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const date = new Date(dateStr + "T00:00:00")
+  const diff = Math.round((date.getTime() - today.getTime()) / 86400000)
+  if (diff === 0) return "Today"
+  if (diff === 1) return "Tomorrow"
+  if (diff === -1) return "Yesterday"
+  if (diff < 0) return `${Math.abs(diff)}d overdue`
+  if (diff <= 7) return `In ${diff}d`
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+}
+
 function TaskRow({
   task,
   workspaceSlug,
@@ -52,13 +72,21 @@ function TaskRow({
     <li>
       <Link
         href={`/${workspaceSlug}/${task.project_id}?task=${task.id}`}
-        className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 -mx-2 hover:bg-secondary/50"
+        className="-mx-2 flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-secondary/50"
       >
+        {task.priority && (
+          <span
+            className={`size-1.5 shrink-0 rounded-full ${PRIORITY_DOT[task.priority] ?? "bg-muted-foreground/40"}`}
+          />
+        )}
         <span className="min-w-0 flex-1 truncate text-sm">{task.title}</span>
         <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-          {task.priority && <span>{PRIORITY_LABELS[task.priority] ?? task.priority}</span>}
-          {task.due_date && <span>{new Date(task.due_date).toLocaleDateString()}</span>}
-          <span className="truncate">{projectName}</span>
+          {task.due_date && (
+            <span className={task.due_date < new Date().toISOString().slice(0, 10) ? "text-destructive" : ""}>
+              {formatRelativeDate(task.due_date)}
+            </span>
+          )}
+          <span className="truncate max-w-[100px]">{projectName}</span>
         </span>
       </Link>
     </li>

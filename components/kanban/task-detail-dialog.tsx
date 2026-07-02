@@ -176,7 +176,16 @@ export function TaskDetailDialog({
           <DialogHeader>
             <DialogTitle>Task details</DialogTitle>
           </DialogHeader>
-          {detailLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+          {detailLoading && (
+            <div className="flex flex-col gap-3 py-2">
+              <div className="h-5 w-3/4 animate-pulse rounded bg-secondary" />
+              <div className="h-20 animate-pulse rounded bg-secondary/60" />
+              <div className="flex gap-3">
+                <div className="h-9 flex-1 animate-pulse rounded bg-secondary/60" />
+                <div className="h-9 flex-1 animate-pulse rounded bg-secondary/60" />
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     )

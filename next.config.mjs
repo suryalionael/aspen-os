@@ -9,10 +9,6 @@ const nextConfig = {
     serverActions: { bodySizeLimit: "4mb" },
   },
   images: {
-    // Lets next/image actually optimize avatar/workspace-logo images
-    // (Supabase Storage public URLs) instead of the `unoptimized` escape
-    // hatch used while this wasn't configured — covers both buckets'
-    // public-object paths under this project's storage host.
     remotePatterns: [
       {
         protocol: "https",
@@ -23,16 +19,9 @@ const nextConfig = {
   },
 }
 
-// Sentry is optional: the integration is a no-op when NEXT_PUBLIC_SENTRY_DSN
-// is not set (see sentry.*.config.ts). withSentryConfig wraps the build to
-// add source map uploads and the Sentry webpack plugin; it's safe to apply
-// even before the DSN is configured.
+// Sentry is a no-op until NEXT_PUBLIC_SENTRY_DSN is set.
+// See sentry.*.config.ts and instrumentation.ts for initialization.
 export default withSentryConfig(nextConfig, {
-  // Suppress the Sentry CLI output during builds when DSN is not yet set.
-  silent: !process.env.NEXT_PUBLIC_SENTRY_DSN,
-  // Source map upload requires SENTRY_AUTH_TOKEN and SENTRY_ORG env vars —
-  // disable until those are configured (see docs/CI-AND-DEPLOYMENT.md).
+  silent: true,
   disableSourceMapUpload: !process.env.SENTRY_AUTH_TOKEN,
-  // Avoid Sentry wrapping server-side routes when DSN is absent.
-  autoInstrumentServerFunctions: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
 })

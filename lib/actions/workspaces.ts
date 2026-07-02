@@ -33,8 +33,8 @@ export async function createWorkspace(
     })
 
     if (!error && data) {
-      await seedOnboarding(supabase, data.id, data.slug)
-      redirect(`/${data.slug}`)
+      const sampleProjectId = await seedOnboarding(supabase, data.id, data.slug)
+      redirect(sampleProjectId ? `/${data.slug}/${sampleProjectId}` : `/${data.slug}`)
     }
 
     // Only retry on a slug collision (DEC-018 / audit M-4) — any other
@@ -61,11 +61,11 @@ async function seedOnboarding(
   supabase: SupabaseClient,
   workspaceId: string,
   workspaceSlug: string
-): Promise<void> {
+): Promise<string | null> {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) return
+  if (!user) return null
 
   const { data: project } = await supabase
     .from("projects")
@@ -78,7 +78,7 @@ async function seedOnboarding(
     .select("id")
     .single()
 
-  if (!project) return
+  if (!project) return null
 
   const sampleTasks = [
     { title: "Invite your team members", status: "todo", priority: "high", position: 1 },
@@ -94,6 +94,8 @@ async function seedOnboarding(
       ...task,
     }))
   )
+
+  return project.id
 }
 
 export type WorkspaceMember = {

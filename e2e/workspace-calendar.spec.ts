@@ -77,13 +77,13 @@ test("workspace calendar combines task due dates, project milestones, and meetin
   await expect(page.getByRole("dialog", { name: "New meeting" })).toBeVisible()
   await page.getByLabel("Title").fill("WCal sync")
   await page.getByLabel("Date").fill(todayKey)
-  const meetingCreated = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Save" }).click()
-  await meetingCreated
-  // createMeeting is a Server Action; in CI it can take >10s. 20s matches
-  // the pattern established by other dialog-close tests in this suite.
-  await expect(page.getByRole("dialog", { name: "New meeting" })).toBeHidden({ timeout: 20_000 })
-  await expect(todayCell.getByTestId("calendar-meeting-chip").filter({ hasText: "WCal sync" })).toBeVisible()
+  // Wait for the meeting chip to appear — this is the definitive signal that
+  // createMeeting succeeded and the dialog closed. Avoids the race where
+  // waitForResponse(POST) resolves on the background checkDueTodayNotifications
+  // Server Action instead of the actual createMeeting call.
+  await expect(todayCell.getByTestId("calendar-meeting-chip").filter({ hasText: "WCal sync" })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole("dialog", { name: "New meeting" })).not.toBeVisible()
 
   // --- Day view still shows all three event types ---
   await page.getByRole("button", { name: "Day", exact: true }).click()

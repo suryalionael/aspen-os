@@ -52,12 +52,17 @@ export function CommandPalette({
       setSearchResults([])
       return
     }
-    startTransition(async () => {
-      const result = await searchWorkspaceTasks(workspaceId, query)
-      if ("success" in result) {
-        setSearchResults(result.results)
-      }
-    })
+    // Debounce: wait 300 ms after the user stops typing before firing the
+    // server action — reduces round-trips from ~1 per keystroke to ~1 per pause.
+    const timer = setTimeout(() => {
+      startTransition(async () => {
+        const result = await searchWorkspaceTasks(workspaceId, query)
+        if ("success" in result) {
+          setSearchResults(result.results)
+        }
+      })
+    }, 300)
+    return () => clearTimeout(timer)
   }, [query, workspaceId, open])
 
   function go(path: string) {

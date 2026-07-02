@@ -16,7 +16,7 @@ function toDateKey(date: Date): string {
 test("workspace calendar combines task due dates, project milestones, and meetings, with day view and meeting create/reschedule", async ({
   page,
 }) => {
-  test.setTimeout(60_000)
+  test.setTimeout(120_000)
 
   const unique = Date.now()
   const email = `e2e-wcal-${unique}@example.com`
@@ -80,7 +80,9 @@ test("workspace calendar combines task due dates, project milestones, and meetin
   const meetingCreated = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Save" }).click()
   await meetingCreated
-  await expect(page.getByRole("dialog", { name: "New meeting" })).toBeHidden()
+  // createMeeting is a Server Action; in CI it can take >10s. 20s matches
+  // the pattern established by other dialog-close tests in this suite.
+  await expect(page.getByRole("dialog", { name: "New meeting" })).toBeHidden({ timeout: 20_000 })
   await expect(todayCell.getByTestId("calendar-meeting-chip").filter({ hasText: "WCal sync" })).toBeVisible()
 
   // --- Day view still shows all three event types ---

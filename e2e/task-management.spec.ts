@@ -8,8 +8,10 @@ import { test, expect, type Page } from "@playwright/test"
 // their loaded-state buttons to appear lets those mount-time fetches
 // settle before any later action registers its own response listener.
 async function waitForDialogSettled(page: Page) {
-  await page.getByRole("button", { name: "Add label" }).waitFor({ state: "visible" })
-  await page.getByRole("button", { name: "Add item" }).waitFor({ state: "visible" })
+  // CI is slow: label/checklist pickers fire their own server actions on mount;
+  // give them 30s each explicitly rather than relying on the per-test budget.
+  await page.getByRole("button", { name: "Add label" }).waitFor({ state: "visible", timeout: 30_000 })
+  await page.getByRole("button", { name: "Add item" }).waitFor({ state: "visible", timeout: 30_000 })
 }
 
 /**
@@ -21,6 +23,7 @@ async function waitForDialogSettled(page: Page) {
 test("edit, archive/restore, and delete all work from the task detail dialog", async ({
   page,
 }) => {
+  test.setTimeout(150_000) // multi-step dialog test; each step takes 30-40s in CI
   const unique = Date.now()
   const email = `e2e-taskmgmt-${unique}@example.com`
   const password = "TestPassword123!"

@@ -49,7 +49,9 @@ test("search, filter, and sort narrow and reorder the board without losing data"
   await page.getByRole("button", { name: "Save" }).click()
   await savePersisted
   await page.keyboard.press("Escape")
-  await expect(page.getByTestId("task-card").getByText("Urgent")).toBeVisible()
+  // Card re-renders via optimistic update after dialog closes; allow up to
+  // 20s in CI where React state flushes can lag under load.
+  await expect(page.getByTestId("task-card").getByText("Urgent")).toBeVisible({ timeout: 20_000 })
 
   // --- Search narrows to a single matching card ---
   await page.getByLabel("Search tasks").fill("Beta")

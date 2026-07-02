@@ -1,6 +1,6 @@
 "use client"
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import dynamic from "next/dynamic"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
@@ -661,7 +661,9 @@ export function KanbanBoard({
     commitMove(taskId, destinationStatus, destinationList, previousState, nextState)
   }
 
-  function handleTaskCreated(task: { id: string; title: string; status: string }) {
+  // Stable reference — only uses functional setState and a stable ref method,
+  // no state reads that would require it to change on every render.
+  const handleTaskCreated = useCallback(function handleTaskCreated(task: { id: string; title: string; status: string }) {
     markTouched(task.id)
     const newTask: Task = {
       ...task,
@@ -693,7 +695,8 @@ export function KanbanBoard({
         [task.status]: [...previous[task.status], newTask],
       }
     })
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function removeTaskFromState(taskId: string) {
     markTouched(taskId)

@@ -7,13 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:rls": "tsx scripts/test-rls.ts",
-    "test:workspace": "tsx scripts/test-workspace.ts",
-    "test:project": "tsx scripts/test-project.ts",
-    "test:task": "tsx scripts/test-task.ts",
-    "test:position": "tsx scripts/test-position.ts",
-    "test:move": "tsx scripts/test-move.ts",
-    "test:roles": "tsx scripts/test-roles.ts",
+    "test:rls": "tsx --import ./scripts/_ws-polyfill.ts scripts/test-rls.ts",
+    "test:workspace": "tsx --import ./scripts/_ws-polyfill.ts scripts/test-workspace.ts",
+    "test:project": "tsx --import ./scripts/_ws-polyfill.ts scripts/test-project.ts",
+    "test:task": "tsx --import ./scripts/_ws-polyfill.ts scripts/test-task.ts",
+    "test:position": "tsx --import ./scripts/_ws-polyfill.ts scripts/test-position.ts",
+    "test:move": "tsx --import ./scripts/_ws-polyfill.ts scripts/test-move.ts",
+    "test:roles": "tsx --import ./scripts/_ws-polyfill.ts scripts/test-roles.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -42,6 +42,7 @@
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
+    "@types/ws": "^8.18.1",
     "autoprefixer": "^10.4.20",
     "eslint": "^8.57.0",
     "eslint-config-next": "^15.1.4",
@@ -51,6 +52,7 @@
     "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",
     "tsx": "^4.22.4",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "ws": "^8.21.0"
   }
 }

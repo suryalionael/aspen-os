@@ -8,10 +8,14 @@ import { test, expect, type Page } from "@playwright/test"
 // their loaded-state buttons to appear lets those mount-time fetches
 // settle before any later action registers its own response listener.
 async function waitForDialogSettled(page: Page) {
-  // CI is slow: label/checklist pickers fire their own server actions on mount;
-  // give them 30s each explicitly rather than relying on the per-test budget.
-  await page.getByRole("button", { name: "Add label" }).waitFor({ state: "visible", timeout: 30_000 })
-  await page.getByRole("button", { name: "Add item" }).waitFor({ state: "visible", timeout: 30_000 })
+  // Label picker and checklist fetch their data concurrently on mount.
+  // Waiting for them sequentially risks consuming the full 30s on the first
+  // before the second even gets a chance — running them in parallel means
+  // each gets its own 30s window simultaneously, matching how the app loads.
+  await Promise.all([
+    page.getByRole("button", { name: "Add label" }).waitFor({ state: "visible", timeout: 30_000 }),
+    page.getByRole("button", { name: "Add item" }).waitFor({ state: "visible", timeout: 30_000 }),
+  ])
 }
 
 /**

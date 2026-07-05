@@ -59,7 +59,7 @@ export function ProjectHeader({
   const overflowCount = members.length - visibleMembers.length
 
   return (
-    <div className="flex flex-col gap-3 border-b border-border px-6 py-5">
+    <div className="flex flex-col gap-3 border-b border-border/60 bg-background/80 px-6 py-4 backdrop-blur-sm">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <h1 className="truncate text-2xl font-semibold tracking-tight">{name}</h1>
@@ -95,7 +95,7 @@ export function ProjectHeader({
         )}
       </div>
 
-      {description && <p className="text-sm text-muted-foreground">{description}</p>}
+      {description && <p className="max-w-prose text-sm leading-relaxed text-muted-foreground/80">{description}</p>}
 
       <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
         {members.length > 0 && (
@@ -121,7 +121,7 @@ export function ProjectHeader({
 
         {totalTasks > 0 && (
           <div className="flex items-center gap-2">
-            <div className="h-1.5 w-28 overflow-hidden rounded-full bg-secondary">
+            <div className="h-1.5 w-32 overflow-hidden rounded-full bg-secondary/80">
               <div
                 className="h-full rounded-full bg-primary transition-all"
                 style={{ width: `${averageProgress}%` }}

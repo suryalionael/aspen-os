@@ -32,10 +32,10 @@ function ProjectLink({
       <Link
         href={`/${workspaceSlug}/${project.id}`}
         onClick={onNavigate}
-        className={`flex-1 rounded-md px-2 py-1.5 text-sm transition-colors ${
+        className={`flex-1 rounded-md px-2 py-1.5 text-sm transition-colors duration-150 ${
           isActive
             ? "bg-secondary font-medium text-foreground"
-            : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+            : "text-muted-foreground/80 hover:bg-secondary/50 hover:text-foreground"
         }`}
       >
         {project.name}
@@ -74,10 +74,10 @@ export function ProjectSidebar({
 
   function navLinkClass(href: string, exact = false) {
     const isActive = exact ? pathname === href : pathname === href || pathname.startsWith(href + "/")
-    return `rounded-md px-2 py-1.5 text-sm transition-colors ${
+    return `rounded-md px-2 py-1.5 text-sm transition-colors duration-150 ${
       isActive
         ? "bg-secondary font-medium text-foreground"
-        : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+        : "text-muted-foreground/80 hover:bg-secondary/50 hover:text-foreground"
     }`
   }
 
@@ -101,7 +101,7 @@ export function ProjectSidebar({
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-30 flex w-64 flex-shrink-0 flex-col gap-3 overflow-y-auto border-r border-border bg-background p-4 transition-transform duration-200 md:static md:z-auto md:w-56 md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-30 flex w-64 flex-shrink-0 flex-col gap-3 overflow-y-auto border-r border-border bg-background/95 p-4 backdrop-blur-sm transition-transform duration-250 md:static md:z-auto md:w-56 md:translate-x-0 md:backdrop-blur-none ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -114,7 +114,7 @@ export function ProjectSidebar({
               at ~290px against a 224px-wide sidebar). Same bug class as
               the earlier "Archived projects" overflow — see DECISION-LOG. */}
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-muted-foreground">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
               Workspace
             </h2>
             <NotificationBell workspaceId={workspaceId} workspaceSlug={workspaceSlug} />
@@ -162,7 +162,7 @@ export function ProjectSidebar({
 
         {favorites.length > 0 && (
           <div className="flex flex-col gap-1">
-            <h2 className="px-1 text-sm font-semibold text-muted-foreground">
+            <h2 className="px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
               Favorites
             </h2>
             <nav className="flex flex-col gap-1">
@@ -180,7 +180,7 @@ export function ProjectSidebar({
         )}
 
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-muted-foreground">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
             Projects
           </h2>
           {/* Project lifecycle management (create/rename/archive/delete) is

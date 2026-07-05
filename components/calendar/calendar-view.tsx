@@ -104,9 +104,7 @@ function CalendarTaskChip({ task, onOpen }: { task: CalendarTask; onOpen: () => 
       {...listeners}
       onClick={onOpen}
       data-testid="calendar-task-chip"
-      className={`flex cursor-grab items-center gap-1 truncate rounded bg-secondary px-1 py-0.5 ${
-        isDragging ? "opacity-40" : ""
-      }`}
+      className={`flex cursor-grab items-center gap-1 truncate rounded-md bg-secondary/80 px-1.5 py-0.5 text-xs transition-opacity duration-100 hover:bg-secondary ${isDragging ? "opacity-40" : ""}`}
     >
       {task.priority && (
         <span className={`size-1.5 shrink-0 rounded-full ${PRIORITY_DOT[task.priority] ?? ""}`} />
@@ -145,9 +143,7 @@ function CalendarMeetingChip({
       {...listeners}
       onClick={onOpen}
       data-testid="calendar-meeting-chip"
-      className={`flex cursor-grab items-center gap-1 truncate rounded bg-blue-500/15 px-1 py-0.5 text-blue-700 dark:text-blue-300 ${
-        isDragging ? "opacity-40" : ""
-      }`}
+      className={`flex cursor-grab items-center gap-1 truncate rounded-md bg-blue-500/10 px-1.5 py-0.5 text-xs text-blue-700 transition-opacity duration-100 hover:bg-blue-500/20 dark:text-blue-300 ${isDragging ? "opacity-40" : ""}`}
     >
       <span className="shrink-0">{time}</span>
       <span className="truncate">{meeting.title}</span>
@@ -166,7 +162,7 @@ function CalendarMilestoneChip({
     <div
       onClick={onOpen}
       data-testid="calendar-milestone-chip"
-      className="flex cursor-pointer items-center gap-1 truncate rounded border border-amber-500/40 bg-amber-500/10 px-1 py-0.5 text-amber-700 dark:text-amber-300"
+      className="flex cursor-pointer items-center gap-1 truncate rounded-md border border-amber-500/30 bg-amber-500/8 px-1.5 py-0.5 text-xs text-amber-700 transition-colors duration-100 hover:bg-amber-500/15 dark:text-amber-300"
     >
       <span className="truncate">🚩 {milestone.title}</span>
     </div>
@@ -205,7 +201,7 @@ function DayCell({
         isOver ? "border-primary bg-primary/5" : "border-border"
       } ${isCurrentMonth ? "" : "opacity-50"}`}
     >
-      <span className={`font-medium ${isToday ? "text-primary" : "text-muted-foreground"}`}>
+      <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold ${isToday ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
         {date.getDate()}
       </span>
       <div className="flex flex-col gap-1">

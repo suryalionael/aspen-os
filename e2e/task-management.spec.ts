@@ -95,16 +95,17 @@ test("edit, archive/restore, and delete all work from the task detail dialog", a
   await expect(page.getByTestId("archived-task-row").getByText("Renamed task")).toBeVisible()
   await page.getByRole("button", { name: "Restore" }).click()
   await page.keyboard.press("Escape")
-  // The task reappears after unarchiveTask succeeds. Use .first() to handle a
-  // transient strict-mode issue: the realtime UPDATE event and the optimistic
-  // handleTaskRestored callback can both briefly add the task, producing 2
-  // entries before the KanbanBoard's deduplication logic resolves them to 1.
+  // Wait for exactly 1 task card before proceeding. Two sources can add the
+  // restored task: handleTaskRestored (called after unarchiveTask returns) and
+  // the realtime UPDATE event (archived_at → null). If UPDATE fires second its
+  // handler strips-then-re-adds, converging to 1. Asserting count==1 waits for
+  // that convergence so the locator below is always unambiguous.
   await expect(
-    page.getByTestId("task-card").filter({ hasText: "Renamed task" }).first()
-  ).toBeVisible()
+    page.getByTestId("task-card").filter({ hasText: "Renamed task" })
+  ).toHaveCount(1)
 
   // --- Delete: requires a second confirming click, then is gone for good ---
-  await page.getByTestId("task-card").filter({ hasText: "Renamed task" }).first().click()
+  await page.getByTestId("task-card").filter({ hasText: "Renamed task" }).click()
   await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
   await waitForDialogSettled(page)
   await page.getByRole("button", { name: "Delete", exact: true }).click()

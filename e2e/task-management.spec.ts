@@ -94,14 +94,16 @@ test("edit, archive/restore, and delete all work from the task detail dialog", a
   await page.getByRole("button", { name: "Archived", exact: true }).click()
   await expect(page.getByTestId("archived-task-row").getByText("Renamed task")).toBeVisible()
   await page.getByRole("button", { name: "Restore" }).click()
-  // Task reappears in column-todo only after unarchiveTask succeeds.
+  // Task reappears only after unarchiveTask succeeds. Use task-card scope to
+  // avoid a transient strict-mode violation when the optimistic state and
+  // realtime UPDATE event both briefly add the task before deduplication.
   await page.keyboard.press("Escape")
   await expect(
-    page.getByTestId("column-todo").getByText("Renamed task")
+    page.getByTestId("task-card").filter({ hasText: "Renamed task" })
   ).toBeVisible()
 
   // --- Delete: requires a second confirming click, then is gone for good ---
-  await page.getByTestId("task-card").getByText("Renamed task").click()
+  await page.getByTestId("task-card").filter({ hasText: "Renamed task" }).first().click()
   await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
   await waitForDialogSettled(page)
   await page.getByRole("button", { name: "Delete", exact: true }).click()

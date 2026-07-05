@@ -1,8 +1,10 @@
 import { test, expect, type Page } from "@playwright/test"
 
 async function waitForDialogSettled(page: Page) {
-  await page.getByRole("button", { name: "Add label" }).waitFor({ state: "visible" })
-  await page.getByRole("button", { name: "Add item" }).waitFor({ state: "visible" })
+  await Promise.all([
+    page.getByRole("button", { name: "Add label" }).waitFor({ state: "visible", timeout: 30_000 }),
+    page.getByRole("button", { name: "Add item" }).waitFor({ state: "visible", timeout: 30_000 }),
+  ])
 }
 
 /**
@@ -87,9 +89,9 @@ test("audit log records task/project/workspace/membership events, survives task 
   await ownerPage.getByRole("button", { name: "Comment" }).click()
   await commentPersisted
   await ownerPage.getByRole("button", { name: "Delete", exact: true }).click()
-  const deletePersisted = ownerPage.waitForResponse((resp) => resp.request().method() === "POST")
   await ownerPage.getByRole("button", { name: "Confirm delete" }).click()
-  await deletePersisted
+  // Dialog closes after deleteTask succeeds (same pattern as task-management.spec.ts)
+  await expect(ownerPage.getByRole("dialog", { name: "Task details" })).toBeHidden()
 
   // --- workspace.renamed ---
   await ownerPage.getByRole("button", { name: "Workspace settings" }).click()

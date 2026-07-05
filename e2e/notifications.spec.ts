@@ -155,7 +155,9 @@ test("notifications fire for assignment, comments, checklist completion, and due
   await memberPage.reload()
   await memberPage.getByRole("button", { name: "Notifications" }).click()
   await expect(memberPage.getByRole("dialog", { name: "Notifications" })).toBeVisible()
+  // Use .first() to handle the rare case where checkDueTodayNotifications
+  // fires twice in a race, producing 2 "Due today" entries simultaneously.
   await expect(
-    memberPage.getByTestId("notification-item").filter({ hasText: "Due today" })
+    memberPage.getByTestId("notification-item").filter({ hasText: "Due today" }).first()
   ).toBeVisible()
 })

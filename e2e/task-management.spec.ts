@@ -5,17 +5,16 @@ import { test, expect, type Page } from "@playwright/test"
 // The task detail dialog's child components (labels, checklist) each fetch
 // their own data once on mount, firing POST requests that can otherwise
 // race a test's own waitForResponse for a subsequent action. Waiting for
-// their loading text to disappear ensures those fetches are done before
-// any later action registers its own response listener.
+// their loaded-state buttons to appear guarantees those fetches are done
+// before any later action registers its own response listener.
 //
-// Waiting for loading text to become HIDDEN is more robust than waiting for
-// a button to APPEAR: if the fetch is fast the loading text never renders,
-// so hidden-wait resolves immediately (zero-wait fast path). If the fetch is
-// slow, we correctly wait for the loading state to clear.
+// "Add label" appears only after getProjectLabels + getTaskLabels complete.
+// "Add item" appears only after getChecklistItems completes.
+// Both are run concurrently (Promise.all) matching how the app loads them.
 async function waitForDialogSettled(page: Page) {
   await Promise.all([
-    page.getByText("Loading labels…").waitFor({ state: "hidden", timeout: 30_000 }),
-    page.getByText("Loading checklist…").waitFor({ state: "hidden", timeout: 30_000 }),
+    page.getByRole("button", { name: "Add label" }).waitFor({ state: "visible", timeout: 30_000 }),
+    page.getByRole("button", { name: "Add item" }).waitFor({ state: "visible", timeout: 30_000 }),
   ])
 }
 
@@ -61,12 +60,14 @@ test("edit, archive/restore, and delete all work from the task detail dialog", a
   await waitForDialogSettled(page)
 
   // --- Edit: rename the task and confirm the card updates ---
+  // Using dialog-close as the "save succeeded" signal instead of
+  // waitForResponse(POST): the dialog only auto-closes (Priority 10) when
+  // editTask returns success. This eliminates the race where a mount-time
+  // server action POST could be captured by the too-broad POST listener.
   const titleInput = page.getByLabel("Title")
   await titleInput.fill("Renamed task")
-  const editPersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Save" }).click()
-  await editPersisted
-  await page.keyboard.press("Escape")
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeHidden()
 
   // Scope to the kanban card to avoid a false strict-mode collision with the
   // "Task updated: Renamed task" toast that the board's real-time subscription
@@ -84,19 +85,16 @@ test("edit, archive/restore, and delete all work from the task detail dialog", a
   await expect(
     page.getByText("Title changed to Renamed task", { exact: false })
   ).toBeVisible()
-  const archivePersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Archive" }).click()
-  await archivePersisted
-  // Scope to task-card to avoid matching the "Task updated: Renamed task"
-  // toast that the board's real-time subscription fires after archive.
+  // Wait for the board to reflect the archive — the task card disappears only
+  // after the server action succeeds (onTaskArchiveChange is called post-await).
   await expect(page.getByTestId("task-card").getByText("Renamed task")).toHaveCount(0)
 
   // --- Restore from the Archived dialog and confirm it reappears ---
   await page.getByRole("button", { name: "Archived", exact: true }).click()
   await expect(page.getByTestId("archived-task-row").getByText("Renamed task")).toBeVisible()
-  const restorePersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Restore" }).click()
-  await restorePersisted
+  // Task reappears in column-todo only after unarchiveTask succeeds.
   await page.keyboard.press("Escape")
   await expect(
     page.getByTestId("column-todo").getByText("Renamed task")
@@ -107,9 +105,9 @@ test("edit, archive/restore, and delete all work from the task detail dialog", a
   await expect(page.getByRole("dialog", { name: "Task details" })).toBeVisible()
   await waitForDialogSettled(page)
   await page.getByRole("button", { name: "Delete", exact: true }).click()
-  const deletePersisted = page.waitForResponse((resp) => resp.request().method() === "POST")
   await page.getByRole("button", { name: "Confirm delete" }).click()
-  await deletePersisted
+  // Dialog closes after deleteTask succeeds (onTaskDeleted calls onOpenChange(false)).
+  await expect(page.getByRole("dialog", { name: "Task details" })).toBeHidden()
   await expect(page.getByText("Renamed task")).toHaveCount(0)
 
   await page.getByRole("button", { name: "Archived", exact: true }).click()

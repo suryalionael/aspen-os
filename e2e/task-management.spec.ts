@@ -94,12 +94,13 @@ test("edit, archive/restore, and delete all work from the task detail dialog", a
   await page.getByRole("button", { name: "Archived", exact: true }).click()
   await expect(page.getByTestId("archived-task-row").getByText("Renamed task")).toBeVisible()
   await page.getByRole("button", { name: "Restore" }).click()
-  // Task reappears only after unarchiveTask succeeds. Use task-card scope to
-  // avoid a transient strict-mode violation when the optimistic state and
-  // realtime UPDATE event both briefly add the task before deduplication.
   await page.keyboard.press("Escape")
+  // The task reappears after unarchiveTask succeeds. Use .first() to handle a
+  // transient strict-mode issue: the realtime UPDATE event and the optimistic
+  // handleTaskRestored callback can both briefly add the task, producing 2
+  // entries before the KanbanBoard's deduplication logic resolves them to 1.
   await expect(
-    page.getByTestId("task-card").filter({ hasText: "Renamed task" })
+    page.getByTestId("task-card").filter({ hasText: "Renamed task" }).first()
   ).toBeVisible()
 
   // --- Delete: requires a second confirming click, then is gone for good ---

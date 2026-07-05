@@ -61,16 +61,18 @@ export const KanbanColumn = memo(function KanbanColumn({
     <div
       ref={setNodeRef}
       data-testid={`column-${status}`}
-      className={`flex w-72 flex-shrink-0 flex-col gap-3 rounded-xl p-3 transition-colors duration-150 ${
-        isOver ? "bg-primary/8 ring-1 ring-primary/20" : (COLUMN_BG[status] ?? "bg-secondary/40")
+      className={`flex w-72 flex-shrink-0 flex-col gap-3 rounded-xl p-3.5 transition-all duration-200 ease-out ${
+        isOver
+          ? "bg-primary/[0.07] ring-2 ring-primary/25 shadow-inner"
+          : (COLUMN_BG[status] ?? "bg-secondary/40")
       }`}
     >
-      <h3 className="flex items-center gap-2 px-1 text-sm font-semibold tracking-tight">
+      <h3 className="flex items-center gap-2 px-0.5 text-sm font-semibold tracking-tight">
         {status === "done" && (
-          <span className="text-emerald-600 dark:text-emerald-400">✓</span>
+          <span className="text-emerald-600 dark:text-emerald-400 text-xs">✓</span>
         )}
         {COLUMN_LABELS[status] ?? status}
-        <span className="rounded-full bg-secondary px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+        <span className="ml-auto rounded-full bg-secondary/80 px-1.5 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
           {tasks.length}
         </span>
       </h3>
@@ -84,8 +86,8 @@ export const KanbanColumn = memo(function KanbanColumn({
         strategy={verticalListSortingStrategy}
       >
         {tasks.length === 0 ? (
-          <p className="px-1 text-sm text-muted-foreground">
-            {isFiltered ? "No matching tasks" : "No tasks yet"}
+          <p className="rounded-lg border border-dashed border-border/60 px-3 py-6 text-center text-xs text-muted-foreground/70">
+            {isFiltered ? "No matching tasks" : "Drop tasks here"}
           </p>
         ) : (
           <div className="flex flex-col gap-2.5">

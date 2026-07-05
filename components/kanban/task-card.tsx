@@ -194,7 +194,7 @@ function TaskCardBody({
 }
 
 const CARD_CLASS =
-  "flex flex-col gap-2 rounded-xl border border-border/60 bg-card p-3.5 text-sm shadow-sm transition-all duration-150 hover:shadow-md hover:border-border"
+  "flex flex-col gap-2.5 rounded-xl border border-border/50 bg-card p-4 text-sm shadow-sm ring-1 ring-transparent transition-all duration-200 ease-out hover:shadow-md hover:border-border/80 hover:ring-border/20 hover:-translate-y-px"
 
 // Memoized — a Kanban board re-renders all its cards on any task mutation
 // (tasksByStatus is one object covering every column), so without this
@@ -222,7 +222,7 @@ export const TaskCard = memo(function TaskCard(props: TaskCardProps) {
       <div
         ref={setNodeRef}
         style={style}
-        className="min-h-[3.5rem] rounded-xl border-2 border-dashed border-border bg-secondary/30"
+        className="min-h-[3.5rem] rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 opacity-60"
       />
     )
   }
@@ -240,7 +240,7 @@ export function TaskCardOverlay(props: TaskCardProps) {
   return (
     <TaskCardBody
       {...props}
-      className={`${CARD_CLASS} rotate-2 cursor-grabbing shadow-xl`}
+      className={`${CARD_CLASS} rotate-1 cursor-grabbing shadow-2xl !border-border/80 scale-[1.02]`}
     />
   )
 }

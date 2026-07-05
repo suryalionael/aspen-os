@@ -97,7 +97,7 @@ function TaskRow({
 }
 
 function EmptyRow({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm text-muted-foreground">{children}</p>
+  return <p className="py-2 text-sm text-muted-foreground/70">{children}</p>
 }
 
 export default async function WorkspaceHomePage({
@@ -274,8 +274,8 @@ export default async function WorkspaceHomePage({
   )
 
   return (
-    <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6">
-      <h1 className="text-lg font-semibold">{workspace.name}</h1>
+    <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-6">
+      <h1 className="text-xl font-semibold tracking-tight">{workspace.name}</h1>
 
       {announcements.length > 0 && (
         <Card>
@@ -301,7 +301,7 @@ export default async function WorkspaceHomePage({
       )}
 
       {/* Quick actions */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 -mt-1">
         <Button size="sm" variant="outline" asChild>
           <Link href={`/${workspaceSlug}/notes`}>+ Note</Link>
         </Button>
@@ -310,7 +310,7 @@ export default async function WorkspaceHomePage({
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 auto-rows-min">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Assigned to you</CardTitle>

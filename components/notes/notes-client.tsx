@@ -80,8 +80,8 @@ export function NotesClient({
             key={item.value}
             type="button"
             onClick={() => setFilter(item.value)}
-            className={`rounded-md border border-input px-2 py-1 text-sm ${
-              filter === item.value ? "bg-secondary" : "hover:bg-secondary"
+            className={`rounded-md border border-input px-2 py-1 text-sm transition-colors duration-150 ${
+              filter === item.value ? "bg-secondary font-medium" : "hover:bg-secondary/70 text-muted-foreground hover:text-foreground"
             }`}
           >
             {item.label}
@@ -108,7 +108,7 @@ export function NotesClient({
               type="button"
               onClick={() => handleOpen(note)}
               data-testid="note-card"
-              className="flex flex-col gap-1 rounded-lg border border-border p-3 text-left hover:bg-secondary/30"
+              className="flex flex-col gap-1.5 rounded-xl border border-border/60 p-4 text-left transition-all duration-150 hover:border-border hover:shadow-sm hover:-translate-y-px"
             >
               <span className="text-xs font-medium text-muted-foreground">
                 {TYPE_LABELS[note.type]}

@@ -5,16 +5,17 @@ import { test, expect, type Page } from "@playwright/test"
 // The task detail dialog's child components (labels, checklist) each fetch
 // their own data once on mount, firing POST requests that can otherwise
 // race a test's own waitForResponse for a subsequent action. Waiting for
-// their loaded-state buttons to appear lets those mount-time fetches
-// settle before any later action registers its own response listener.
+// their loading text to disappear ensures those fetches are done before
+// any later action registers its own response listener.
+//
+// Waiting for loading text to become HIDDEN is more robust than waiting for
+// a button to APPEAR: if the fetch is fast the loading text never renders,
+// so hidden-wait resolves immediately (zero-wait fast path). If the fetch is
+// slow, we correctly wait for the loading state to clear.
 async function waitForDialogSettled(page: Page) {
-  // Label picker and checklist fetch their data concurrently on mount.
-  // Waiting for them sequentially risks consuming the full 30s on the first
-  // before the second even gets a chance — running them in parallel means
-  // each gets its own 30s window simultaneously, matching how the app loads.
   await Promise.all([
-    page.getByRole("button", { name: "Add label" }).waitFor({ state: "visible", timeout: 30_000 }),
-    page.getByRole("button", { name: "Add item" }).waitFor({ state: "visible", timeout: 30_000 }),
+    page.getByText("Loading labels…").waitFor({ state: "hidden", timeout: 30_000 }),
+    page.getByText("Loading checklist…").waitFor({ state: "hidden", timeout: 30_000 }),
   ])
 }
 

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { getWorkspaceBySlug } from "@/lib/data/workspace"
 import { ProjectSidebar } from "@/components/project/project-sidebar"
-import { CommandPalette } from "@/components/command-palette"
+import { LazyCommandPalette } from "@/components/lazy-cmd"
 
 export default async function WorkspaceLayout({
   children,
@@ -28,9 +28,8 @@ export default async function WorkspaceLayout({
     .is("archived_at", null)
     .order("created_at", { ascending: true })
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   const { data: membership } = await supabase
     .from("workspace_members")
@@ -68,7 +67,7 @@ export default async function WorkspaceLayout({
       >
         {children}
       </ProjectSidebar>
-      <CommandPalette
+      <LazyCommandPalette
         workspaceSlug={workspace.slug}
         workspaceId={workspace.id}
         projects={projectsWithFavorite}

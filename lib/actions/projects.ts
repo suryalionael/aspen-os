@@ -24,9 +24,8 @@ export async function createProject(
   }
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to create a project." }
@@ -55,9 +54,8 @@ export async function renameProject(
   }
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   const { data, error } = await supabase
     .from("projects")
@@ -101,9 +99,8 @@ export async function updateProjectDetails(
   }
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   const { data, error } = await supabase
     .from("projects")
@@ -144,9 +141,8 @@ export async function archiveProject(
   projectId: string
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   const { data, error } = await supabase
     .from("projects")
@@ -176,9 +172,8 @@ export async function unarchiveProject(
   projectId: string
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   const { data, error } = await supabase
     .from("projects")
@@ -230,9 +225,8 @@ export async function deleteProject(
   workspaceSlug: string
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   // Fetched before deleting — same reasoning as deleteTask: once the row
   // is gone there's nothing left to read its name/workspace_id from.
@@ -265,9 +259,8 @@ export async function toggleFavoriteProject(
   isFavorite: boolean
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to favorite a project." }

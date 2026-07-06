@@ -20,9 +20,8 @@ export async function getComments(taskId: string): Promise<
   | { success: true; comments: Comment[]; currentUserId: string | null }
 > {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   const { data, error } = await supabase
     .from("comments")
@@ -47,9 +46,8 @@ export async function addComment(
   }
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to comment." }

@@ -13,9 +13,8 @@ import {
 
 export default async function AccountPage() {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
   const profile = await getProfile()
 
   return (

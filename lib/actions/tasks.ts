@@ -45,9 +45,8 @@ export async function createTask(
   }
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to create a task." }
@@ -138,9 +137,8 @@ export type MoveTaskResult = { error: string } | { success: true }
 
 export async function moveTask(input: MoveTaskInput): Promise<MoveTaskResult> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   const { data: columnTasks, error: fetchError } = await supabase
     .from("tasks")
@@ -282,9 +280,8 @@ export async function editTask(
   }
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to edit a task." }
@@ -358,9 +355,8 @@ export type ArchiveTaskResult = { error: string } | { success: true }
 
 export async function archiveTask(taskId: string): Promise<ArchiveTaskResult> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to archive a task." }
@@ -393,9 +389,8 @@ export async function archiveTask(taskId: string): Promise<ArchiveTaskResult> {
 
 export async function unarchiveTask(taskId: string): Promise<ArchiveTaskResult> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to unarchive a task." }
@@ -430,9 +425,8 @@ export type DeleteTaskResult = { error: string } | { success: true }
 
 export async function deleteTask(taskId: string): Promise<DeleteTaskResult> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to delete a task." }
@@ -475,9 +469,8 @@ export async function updateTaskDueDate(
   dueDate: string | null
 ): Promise<UpdateTaskDueDateResult> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to move a task." }

@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { Suspense } from "react"
 
 import { createClient } from "@/lib/supabase/server"
 import { getWorkspaceBySlug } from "@/lib/data/workspace"
@@ -7,29 +8,34 @@ import { formatDateTime } from "@/lib/utils/format-date"
 import { describeActivity } from "@/lib/utils/activity-labels"
 import { EmptyState } from "@/components/ui/empty-state"
 
-export default async function WorkspaceActivityPage({
-  params,
+function ActivitySkeleton() {
+  return (
+    <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6">
+      <div className="h-6 w-24 animate-pulse rounded-md bg-muted" />
+      <div className="flex flex-col gap-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="h-5 animate-pulse rounded bg-muted" />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+async function ActivityContent({
+  workspaceId,
+  workspaceSlug,
+  timezone,
 }: {
-  params: Promise<{ workspaceSlug: string }>
+  workspaceId: string
+  workspaceSlug: string
+  timezone: string | null
 }) {
-  const { workspaceSlug } = await params
   const supabase = await createClient()
-
-  const workspace = await getWorkspaceBySlug(workspaceSlug)
-  if (!workspace) {
-    notFound()
-  }
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  const timezone =
-    typeof user?.user_metadata?.timezone === "string" ? user.user_metadata.timezone : null
 
   const { data: projects } = await supabase
     .from("projects")
     .select("id, name")
-    .eq("workspace_id", workspace.id)
+    .eq("workspace_id", workspaceId)
     .is("archived_at", null)
 
   const projectIds = (projects ?? []).map((project) => project.id)
@@ -58,31 +64,20 @@ export default async function WorkspaceActivityPage({
       : { data: [] }
 
   const { data: members } = await supabase.rpc("get_workspace_members_with_email", {
-    p_workspace_id: workspace.id,
+    p_workspace_id: workspaceId,
   })
   const emailByUserId = new Map<string, string>(
-    (members ?? []).map((member: { user_id: string; email: string }) => [
-      member.user_id,
-      member.email,
-    ])
+    (members ?? []).map((member: { user_id: string; email: string }) => [member.user_id, member.email])
   )
 
   return (
-    <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6">
-      <h1 className="text-lg font-semibold">Activity</h1>
-
+    <>
       {!activity?.length ? (
-        <EmptyState
-          icon="📋"
-          title="No activity yet"
-          description="Task updates, comments, and edits will appear here once your team starts working."
-        />
+        <EmptyState icon="📋" title="No activity yet" description="Task updates, comments, and edits will appear here once your team starts working." />
       ) : (
         <ul className="flex flex-col gap-2">
           {activity.map((entry) => {
-            const actorEmail = entry.actor_id
-              ? (emailByUserId.get(entry.actor_id) ?? "Someone")
-              : "Someone"
+            const actorEmail = entry.actor_id ? (emailByUserId.get(entry.actor_id) ?? "Someone") : "Someone"
             const taskTitle = taskTitleById.get(entry.task_id) ?? "a task"
             const projectId = taskProjectById.get(entry.task_id)
             const projectName = projectId ? (projectNameById.get(projectId) ?? "") : ""
@@ -91,28 +86,13 @@ export default async function WorkspaceActivityPage({
             return (
               <li key={entry.id} className="text-sm text-muted-foreground">
                 <span className="font-medium text-foreground">{actorEmail}</span>
-                {" — "}
-                {verb}
-                {" on "}
+                {" — "}{verb}{" on "}
                 {projectId ? (
-                  <Link
-                    href={`/${workspaceSlug}/${projectId}`}
-                    className="font-medium text-foreground hover:underline"
-                  >
-                    {taskTitle}
-                  </Link>
-                ) : (
-                  <span className="font-medium text-foreground">{taskTitle}</span>
-                )}
+                  <Link href={`/${workspaceSlug}/${projectId}`} className="font-medium text-foreground hover:underline">{taskTitle}</Link>
+                ) : <span className="font-medium text-foreground">{taskTitle}</span>}
                 {projectName && (
-                  <span className="text-xs">
-                    {" "}in{" "}
-                    <Link
-                      href={`/${workspaceSlug}/${projectId}`}
-                      className="hover:underline"
-                    >
-                      {projectName}
-                    </Link>
+                  <span className="text-xs"> in{" "}
+                    <Link href={`/${workspaceSlug}/${projectId}`} className="hover:underline">{projectName}</Link>
                   </span>
                 )}
                 <span className="ml-2 text-xs">· {formatDateTime(entry.created_at, timezone)}</span>
@@ -121,6 +101,31 @@ export default async function WorkspaceActivityPage({
           })}
         </ul>
       )}
+    </>
+  )
+}
+
+export default async function WorkspaceActivityPage({
+  params,
+}: {
+  params: Promise<{ workspaceSlug: string }>
+}) {
+  const { workspaceSlug } = await params
+  const supabase = await createClient()
+
+  const workspace = await getWorkspaceBySlug(workspaceSlug)
+  if (!workspace) notFound()
+
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
+  const timezone = typeof user?.user_metadata?.timezone === "string" ? user.user_metadata.timezone : null
+
+  return (
+    <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6">
+      <h1 className="text-lg font-semibold">Activity</h1>
+      <Suspense fallback={<ActivitySkeleton />}>
+        <ActivityContent workspaceId={workspace.id} workspaceSlug={workspaceSlug} timezone={timezone} />
+      </Suspense>
     </div>
   )
 }

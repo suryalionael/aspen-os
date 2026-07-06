@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { Suspense } from "react"
 
 import { createClient } from "@/lib/supabase/server"
 import { getWorkspaceBySlug } from "@/lib/data/workspace"
@@ -100,69 +101,65 @@ function EmptyRow({ children }: { children: React.ReactNode }) {
   return <p className="py-2 text-sm text-muted-foreground/70">{children}</p>
 }
 
-export default async function WorkspaceHomePage({
-  params,
-}: {
-  params: Promise<{ workspaceSlug: string }>
-}) {
-  const { workspaceSlug } = await params
-  const supabase = await createClient()
-
-  const workspace = await getWorkspaceBySlug(workspaceSlug)
-
-  if (!workspace) {
-    notFound()
-  }
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  const timezone =
-    typeof user?.user_metadata?.timezone === "string" ? user.user_metadata.timezone : null
-
-  const { data: projects } = await supabase
-    .from("projects")
-    .select("id, name")
-    .eq("workspace_id", workspace.id)
-    .is("archived_at", null)
-
-  const projectIds = (projects ?? []).map((project) => project.id)
-  const projectNameById = new Map((projects ?? []).map((project) => [project.id, project.name]))
-
-  if (!user || projectIds.length === 0) {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
-        <span className="text-5xl">🌱</span>
-        <div className="flex flex-col gap-1">
-          <p className="font-semibold text-foreground">Welcome to {workspace.name}</p>
-          <p className="max-w-xs text-sm text-muted-foreground">
-            Create your first project to start organizing tasks, setting due dates, and collaborating with your team.
-          </p>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          <span className="hidden md:inline">Click <strong>New</strong> in the sidebar to create a project.</span>
-          <span className="md:hidden">Tap the menu button to create your first project.</span>
-        </p>
+function DashboardSkeleton() {
+  return (
+    <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-6">
+      <div className="h-7 w-48 animate-pulse rounded-md bg-muted" />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 auto-rows-min">
+        <Card>
+          <CardHeader><CardTitle className="text-base">Assigned to you</CardTitle></CardHeader>
+          <CardContent><div className="h-20 animate-pulse rounded bg-muted" /></CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle className="text-base">Due today</CardTitle></CardHeader>
+          <CardContent><div className="h-20 animate-pulse rounded bg-muted" /></CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle className="text-base">Upcoming deadlines</CardTitle></CardHeader>
+          <CardContent><div className="h-20 animate-pulse rounded bg-muted" /></CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle className="text-base">Favorite projects</CardTitle></CardHeader>
+          <CardContent><div className="h-20 animate-pulse rounded bg-muted" /></CardContent>
+        </Card>
+        <Card className="lg:col-span-2">
+          <CardHeader><CardTitle className="text-base">Recent activity</CardTitle></CardHeader>
+          <CardContent><div className="h-24 animate-pulse rounded bg-muted" /></CardContent>
+        </Card>
       </div>
-    )
-  }
+    </div>
+  )
+}
+
+async function DashboardContent({
+  workspace,
+  workspaceSlug,
+  projects,
+  timezone,
+  userId,
+}: {
+  workspace: { id: string; name: string }
+  workspaceSlug: string
+  projects: { id: string; name: string }[]
+  timezone: string | null
+  userId: string
+}) {
+  const supabase = await createClient()
+  const projectNameById = new Map(projects.map((project) => [project.id, project.name]))
+  const projectIds = projects.map((project) => project.id)
 
   const today = new Date().toISOString().slice(0, 10)
   const weekAhead = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     .toISOString()
     .slice(0, 10)
 
-  // "Assigned to you" needs both the legacy assignee_id column AND the
-  // task_assignees join table (added in Sprint 4 Priority 9). Run both
-  // queries in parallel then merge+deduplicate so users see all tasks
-  // regardless of which assignment path was used.
   const [assignedLegacyResult, assignedViaJoinResult, dueTodayResult, upcomingResult, favoritesResult, taskIdsResult, notesResult, todayMeetingsResult] =
     await Promise.all([
       supabase
         .from("tasks")
         .select("id, title, project_id, due_date, priority")
         .in("project_id", projectIds)
-        .eq("assignee_id", user.id)
+        .eq("assignee_id", userId)
         .is("archived_at", null)
         .neq("status", "done")
         .order("due_date", { ascending: true, nullsFirst: false })
@@ -170,7 +167,7 @@ export default async function WorkspaceHomePage({
       supabase
         .from("task_assignees")
         .select("task_id, tasks!inner(id, title, project_id, due_date, priority, status, archived_at)")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .in("tasks.project_id", projectIds),
       supabase
         .from("tasks")
@@ -194,7 +191,7 @@ export default async function WorkspaceHomePage({
       supabase
         .from("project_favorites")
         .select("project_id")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .in("project_id", projectIds),
       supabase.from("tasks").select("id, title, project_id").in("project_id", projectIds),
       getWorkspaceNotes(workspace.id),
@@ -207,7 +204,6 @@ export default async function WorkspaceHomePage({
         .order("start_time", { ascending: true }),
     ])
 
-  // Merge legacy + join-table assigned tasks, deduplicate by id, exclude done.
   const assignedSeen = new Set<string>()
   const assignedMerged: DashboardTask[] = []
   for (const task of assignedLegacyResult.data ?? []) {
@@ -218,11 +214,7 @@ export default async function WorkspaceHomePage({
   }
   for (const row of assignedViaJoinResult.data ?? []) {
     const task = row.tasks as unknown as DashboardTask & { status: string; archived_at: string | null }
-    if (
-      !assignedSeen.has(task.id) &&
-      task.status !== "done" &&
-      task.archived_at === null
-    ) {
+    if (!assignedSeen.has(task.id) && task.status !== "done" && task.archived_at === null) {
       assignedSeen.add(task.id)
       assignedMerged.push(task)
     }
@@ -234,9 +226,7 @@ export default async function WorkspaceHomePage({
     return a.due_date < b.due_date ? -1 : 1
   })
 
-  const announcements = (
-    "success" in notesResult ? notesResult.notes : []
-  )
+  const announcements = ("success" in notesResult ? notesResult.notes : [])
     .filter((note) => note.type === "announcement")
     .slice(0, 3)
 
@@ -246,8 +236,6 @@ export default async function WorkspaceHomePage({
   const allTaskIds = (taskIdsResult.data ?? []).map((task) => task.id)
   const todayMeetings = todayMeetingsResult.data ?? []
 
-  // activity needs allTaskIds (computed above); members only needs workspace.id
-  // (known from the start) — run both in parallel rather than sequentially.
   const [{ data: activity }, { data: members }] = await Promise.all([
     allTaskIds.length > 0
       ? supabase
@@ -260,38 +248,22 @@ export default async function WorkspaceHomePage({
     supabase.rpc("get_workspace_members_with_email", { p_workspace_id: workspace.id }),
   ])
   const emailByUserId = new Map<string, string>(
-    (members ?? []).map((member: { user_id: string; email: string }) => [
-      member.user_id,
-      member.email,
-    ])
+    (members ?? []).map((member: { user_id: string; email: string }) => [member.user_id, member.email])
   )
 
-  const favoriteProjectIds = new Set(
-    (favoritesResult.data ?? []).map((row) => row.project_id)
-  )
-  const favoriteProjects = (projects ?? []).filter((project) =>
-    favoriteProjectIds.has(project.id)
-  )
+  const favoriteProjectIds = new Set((favoritesResult.data ?? []).map((row) => row.project_id))
+  const favoriteProjects = projects.filter((project) => favoriteProjectIds.has(project.id))
 
   return (
-    <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-6">
-      <h1 className="text-xl font-semibold tracking-tight">{workspace.name}</h1>
-
+    <>
       {announcements.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Announcements</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-base">Announcements</CardTitle></CardHeader>
           <CardContent>
             <ul className="flex flex-col gap-2">
               {announcements.map((note) => (
                 <li key={note.id} className="text-sm">
-                  <Link
-                    href={`/${workspaceSlug}/notes`}
-                    className="font-medium hover:underline"
-                  >
-                    {note.title}
-                  </Link>
+                  <Link href={`/${workspaceSlug}/notes`} className="font-medium hover:underline">{note.title}</Link>
                   <p className="line-clamp-2 text-muted-foreground">{note.body}</p>
                 </li>
               ))}
@@ -300,79 +272,43 @@ export default async function WorkspaceHomePage({
         </Card>
       )}
 
-      {/* Quick actions */}
-      <div className="flex flex-wrap gap-2 -mt-1">
-        <Button size="sm" variant="outline" asChild>
-          <Link href={`/${workspaceSlug}/notes`}>+ Note</Link>
-        </Button>
-        <Button size="sm" variant="outline" asChild>
-          <Link href={`/${workspaceSlug}/calendar`}>+ Meeting</Link>
-        </Button>
-      </div>
-
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 auto-rows-min">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Assigned to you</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-base">Assigned to you</CardTitle></CardHeader>
           <CardContent>
             {assignedMerged.length ? (
               <ul className="flex flex-col gap-1">
                 {assignedMerged.slice(0, 10).map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    workspaceSlug={workspaceSlug}
-                    projectName={projectNameById.get(task.project_id) ?? ""}
-                  />
+                  <TaskRow key={task.id} task={task} workspaceSlug={workspaceSlug} projectName={projectNameById.get(task.project_id) ?? ""} />
                 ))}
               </ul>
-            ) : (
-              <EmptyRow>No tasks assigned to you yet.</EmptyRow>
-            )}
+            ) : <EmptyRow>No tasks assigned to you yet.</EmptyRow>}
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Due today</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-base">Due today</CardTitle></CardHeader>
           <CardContent>
             {dueTodayResult.data?.length ? (
               <ul className="flex flex-col gap-1">
                 {dueTodayResult.data.map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    workspaceSlug={workspaceSlug}
-                    projectName={projectNameById.get(task.project_id) ?? ""}
-                  />
+                  <TaskRow key={task.id} task={task} workspaceSlug={workspaceSlug} projectName={projectNameById.get(task.project_id) ?? ""} />
                 ))}
               </ul>
-            ) : (
-              <EmptyRow>Nothing due today.</EmptyRow>
-            )}
+            ) : <EmptyRow>Nothing due today.</EmptyRow>}
           </CardContent>
         </Card>
 
         {todayMeetings.length > 0 && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Today&apos;s meetings</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-base">Today&apos;s meetings</CardTitle></CardHeader>
             <CardContent>
               <ul className="flex flex-col gap-1">
                 {todayMeetings.map((meeting) => {
-                  const startTime = new Date(meeting.start_time).toLocaleTimeString(undefined, {
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })
+                  const startTime = new Date(meeting.start_time).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
                   return (
                     <li key={meeting.id}>
-                      <Link
-                        href={`/${workspaceSlug}/calendar`}
-                        className="-mx-2 flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-secondary/50"
-                      >
+                      <Link href={`/${workspaceSlug}/calendar`} className="-mx-2 flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-secondary/50">
                         <span className="shrink-0 text-xs text-muted-foreground">{startTime}</span>
                         <span className="min-w-0 flex-1 truncate text-sm">{meeting.title}</span>
                       </Link>
@@ -385,63 +321,41 @@ export default async function WorkspaceHomePage({
         )}
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Upcoming deadlines</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-base">Upcoming deadlines</CardTitle></CardHeader>
           <CardContent>
             {upcomingResult.data?.length ? (
               <ul className="flex flex-col gap-1">
                 {upcomingResult.data.map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    workspaceSlug={workspaceSlug}
-                    projectName={projectNameById.get(task.project_id) ?? ""}
-                  />
+                  <TaskRow key={task.id} task={task} workspaceSlug={workspaceSlug} projectName={projectNameById.get(task.project_id) ?? ""} />
                 ))}
               </ul>
-            ) : (
-              <EmptyRow>Nothing due in the next 7 days.</EmptyRow>
-            )}
+            ) : <EmptyRow>Nothing due in the next 7 days.</EmptyRow>}
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Favorite projects</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-base">Favorite projects</CardTitle></CardHeader>
           <CardContent>
             {favoriteProjects.length ? (
               <ul className="flex flex-col gap-1">
                 {favoriteProjects.map((project) => (
                   <li key={project.id}>
-                    <Link
-                      href={`/${workspaceSlug}/${project.id}`}
-                      className="block rounded-md px-2 py-1.5 -mx-2 text-sm hover:bg-secondary/50"
-                    >
-                      {project.name}
-                    </Link>
+                    <Link href={`/${workspaceSlug}/${project.id}`} className="block rounded-md px-2 py-1.5 -mx-2 text-sm hover:bg-secondary/50">{project.name}</Link>
                   </li>
                 ))}
               </ul>
-            ) : (
-              <EmptyRow>Star a project to pin it here.</EmptyRow>
-            )}
+            ) : <EmptyRow>Star a project to pin it here.</EmptyRow>}
           </CardContent>
         </Card>
 
         <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">Recent activity</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-base">Recent activity</CardTitle></CardHeader>
           <CardContent>
             {activity?.length ? (
               <ul className="flex flex-col gap-1.5 text-sm text-muted-foreground">
                 {activity.map((entry) => {
                   const verb = ACTIVITY_VERBS[entry.event_type] ?? entry.event_type
-                  const actorEmail = entry.actor_id
-                    ? emailByUserId.get(entry.actor_id) ?? "Someone"
-                    : "Someone"
+                  const actorEmail = entry.actor_id ? emailByUserId.get(entry.actor_id) ?? "Someone" : "Someone"
                   const taskInfo = taskById.get(entry.task_id)
                   const taskTitle = taskInfo?.title ?? "a task"
                   const taskProjectId = taskInfo?.project_id
@@ -449,27 +363,83 @@ export default async function WorkspaceHomePage({
                     <li key={entry.id}>
                       <span className="text-foreground">{actorEmail}</span> {verb}{" "}
                       {taskProjectId ? (
-                        <Link
-                          href={`/${workspaceSlug}/${taskProjectId}?task=${entry.task_id}`}
-                          className="font-medium text-foreground hover:underline"
-                        >
-                          &quot;{taskTitle}&quot;
-                        </Link>
-                      ) : (
-                        <span className="text-foreground">&quot;{taskTitle}&quot;</span>
-                      )}
-                      {" · "}
-                      {formatDateTime(entry.created_at, timezone)}
+                        <Link href={`/${workspaceSlug}/${taskProjectId}?task=${entry.task_id}`} className="font-medium text-foreground hover:underline">&quot;{taskTitle}&quot;</Link>
+                      ) : <span className="text-foreground">&quot;{taskTitle}&quot;</span>}
+                      {" · "}{formatDateTime(entry.created_at, timezone)}
                     </li>
                   )
                 })}
               </ul>
-            ) : (
-              <EmptyRow>No activity yet.</EmptyRow>
-            )}
+            ) : <EmptyRow>No activity yet.</EmptyRow>}
           </CardContent>
         </Card>
       </div>
+    </>
+  )
+}
+
+export default async function WorkspaceHomePage({
+  params,
+}: {
+  params: Promise<{ workspaceSlug: string }>
+}) {
+  const { workspaceSlug } = await params
+  const supabase = await createClient()
+
+  const workspace = await getWorkspaceBySlug(workspaceSlug)
+  if (!workspace) notFound()
+
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
+
+  const { data: projects } = await supabase
+    .from("projects")
+    .select("id, name")
+    .eq("workspace_id", workspace.id)
+    .is("archived_at", null)
+
+  if (!user || !projects?.length) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
+        <span className="text-5xl">🌱</span>
+        <div className="flex flex-col gap-1">
+          <p className="font-semibold text-foreground">Welcome to {workspace.name}</p>
+          <p className="max-w-xs text-sm text-muted-foreground">
+            Create your first project to start organizing tasks, setting due dates, and collaborating with your team.
+          </p>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          <span className="hidden md:inline">Click <strong>New</strong> in the sidebar to create a project.</span>
+          <span className="md:hidden">Tap the menu button to create your first project.</span>
+        </p>
+      </div>
+    )
+  }
+
+  const timezone = typeof user?.user_metadata?.timezone === "string" ? user.user_metadata.timezone : null
+
+  return (
+    <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-6">
+      <h1 className="text-xl font-semibold tracking-tight">{workspace.name}</h1>
+
+      <div className="flex flex-wrap gap-2 -mt-1">
+        <Button size="sm" variant="outline" asChild>
+          <Link href={`/${workspaceSlug}/notes`}>+ Note</Link>
+        </Button>
+        <Button size="sm" variant="outline" asChild>
+          <Link href={`/${workspaceSlug}/calendar`}>+ Meeting</Link>
+        </Button>
+      </div>
+
+      <Suspense fallback={<DashboardSkeleton />}>
+        <DashboardContent
+          workspace={workspace}
+          workspaceSlug={workspaceSlug}
+          projects={projects}
+          timezone={timezone}
+          userId={user.id}
+        />
+      </Suspense>
     </div>
   )
 }

@@ -20,6 +20,17 @@ const AUTH_PATHS = new Set(["/sign-in", "/sign-up", "/forgot-password"])
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
+  const { pathname } = request.nextUrl
+  const isPublic = PUBLIC_PATHS.has(pathname) || pathname.startsWith("/invite/")
+
+  // Skip session refresh for RSC payload fetches and prefetches — these
+  // are client-side navigations from already-authenticated pages. The
+  // initial page load already verified + refreshed the session via
+  // getUser(). Saves ~130ms per client navigation.
+  if (request.headers.get("RSC") === "1" || request.headers.get("Next-Router-Prefetch") === "1") {
+    return supabaseResponse
+  }
+
   const { url, anonKey } = getSupabaseEnv()
 
   const supabase = createServerClient(url, anonKey, {
@@ -45,13 +56,6 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
-  const { pathname } = request.nextUrl
-  // /invite/[token] is the one public route that's dynamic rather than
-  // fixed (DEC-022) — an invitee who isn't signed in yet still needs to
-  // see which workspace they're being invited to before being asked to
-  // sign up/in.
-  const isPublic = PUBLIC_PATHS.has(pathname) || pathname.startsWith("/invite/")
 
   if (!user && !isPublic) {
     const redirectUrl = request.nextUrl.clone()

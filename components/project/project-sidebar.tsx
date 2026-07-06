@@ -2,17 +2,19 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import { usePathname } from "next/navigation"
 import { Menu, X } from "lucide-react"
 
-import { ProjectCreateDialog } from "@/components/project/project-create-dialog"
 import { ProjectFavoriteButton } from "@/components/project/project-favorite-button"
-import { ArchivedProjectsDialog } from "@/components/project/archived-projects-dialog"
-import { WorkspaceMembersDialog } from "@/components/workspace/workspace-members-dialog"
-import { WorkspaceSettingsDialog } from "@/components/workspace/workspace-settings-dialog"
-import { AuditLogDialog } from "@/components/workspace/audit-log-dialog"
-import { NotificationBell } from "@/components/notifications/notification-bell"
 import type { WorkspaceSettings } from "@/lib/actions/workspace-settings"
+
+const ProjectCreateDialog = dynamic(() => import("@/components/project/project-create-dialog").then((m) => m.ProjectCreateDialog), { ssr: true })
+const ArchivedProjectsDialog = dynamic(() => import("@/components/project/archived-projects-dialog").then((m) => m.ArchivedProjectsDialog), { ssr: true })
+const WorkspaceMembersDialog = dynamic(() => import("@/components/workspace/workspace-members-dialog").then((m) => m.WorkspaceMembersDialog), { ssr: true })
+const WorkspaceSettingsDialog = dynamic(() => import("@/components/workspace/workspace-settings-dialog").then((m) => m.WorkspaceSettingsDialog), { ssr: true })
+const AuditLogDialog = dynamic(() => import("@/components/workspace/audit-log-dialog").then((m) => m.AuditLogDialog), { ssr: true })
+const NotificationBell = dynamic(() => import("@/components/notifications/notification-bell").then((m) => m.NotificationBell), { ssr: true })
 
 type Project = { id: string; name: string; isFavorite: boolean }
 

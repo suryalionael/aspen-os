@@ -15,9 +15,8 @@ export default async function InvitePage({
   const result = await getInviteWorkspaceName(token)
   const workspaceName = "success" in result ? result.workspaceName : null
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!workspaceName) {
     return (

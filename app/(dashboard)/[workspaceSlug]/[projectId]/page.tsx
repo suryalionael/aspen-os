@@ -27,11 +27,11 @@ export default async function ProjectPage({
   // parallel to eliminate sequential round-trips (saves ~400-800ms per
   // page load given cross-region Supabase latency).
   const [
-    { data: { user } },
+    { data: { session } },
     { data: tasks },
     { data: memberRows },
   ] = await Promise.all([
-    supabase.auth.getUser(),
+    supabase.auth.getSession(),
     supabase
       .from("tasks")
       .select(
@@ -45,6 +45,7 @@ export default async function ProjectPage({
       p_workspace_id: project.workspace_id,
     }),
   ])
+  const user = session?.user
 
   const members = (memberRows ?? []).map((member: { user_id: string; email: string }) => ({
     user_id: member.user_id,

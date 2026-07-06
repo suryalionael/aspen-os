@@ -18,9 +18,8 @@ export default async function WorkspaceNotesPage({
     notFound()
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
   const timezone =
     typeof user?.user_metadata?.timezone === "string" ? user.user_metadata.timezone : null
 

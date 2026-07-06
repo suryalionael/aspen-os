@@ -31,9 +31,8 @@ function readProfile(metadata: Record<string, unknown>): Profile {
 
 export async function getProfile(): Promise<Profile | null> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) return null
   return readProfile(user.user_metadata ?? {})
@@ -98,9 +97,8 @@ export async function uploadAvatar(
   }
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to upload an avatar." }
@@ -142,9 +140,8 @@ export async function uploadAvatar(
 
 export async function removeAvatar(): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to remove your avatar." }

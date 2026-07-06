@@ -44,9 +44,8 @@ export async function createNote(input: {
   body: string
 }): Promise<{ error: string } | { success: true; note: Note }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to create a note." }
@@ -94,9 +93,8 @@ export async function updateNote(
   input: { title: string; body: string; type: NoteType; projectId: string | null }
 ): Promise<{ error: string } | { success: true; note: Note }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to edit a note." }

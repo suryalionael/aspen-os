@@ -76,9 +76,8 @@ export async function uploadAttachment(
   }
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to upload an attachment." }
@@ -166,9 +165,8 @@ export async function deleteAttachment(
   taskId: string
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to remove an attachment." }

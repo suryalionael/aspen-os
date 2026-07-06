@@ -20,9 +20,8 @@ export async function deleteAccount(
   }
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to delete your account." }

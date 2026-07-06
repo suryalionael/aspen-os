@@ -34,17 +34,20 @@ type MeetingRow = {
 async function resolveAttendeeEmails(
   supabase: SupabaseServerClient,
   workspaceId: string,
-  rows: MeetingRow[]
+  rows: MeetingRow[],
+  emailByUserId?: Map<string, string>
 ): Promise<Meeting[]> {
-  const { data: members } = await supabase.rpc("get_workspace_members_with_email", {
-    p_workspace_id: workspaceId,
-  })
-  const emailByUserId = new Map<string, string>(
-    (members ?? []).map((member: { user_id: string; email: string }) => [
-      member.user_id,
-      member.email,
-    ])
-  )
+  if (!emailByUserId) {
+    const { data: members } = await supabase.rpc("get_workspace_members_with_email", {
+      p_workspace_id: workspaceId,
+    })
+    emailByUserId = new Map<string, string>(
+      (members ?? []).map((member: { user_id: string; email: string }) => [
+        member.user_id,
+        member.email,
+      ])
+    )
+  }
   return rows.map((row) => ({
     id: row.id,
     workspace_id: row.workspace_id,
@@ -55,13 +58,14 @@ async function resolveAttendeeEmails(
     end_time: row.end_time,
     attendees: row.meeting_attendees.map((attendee) => ({
       user_id: attendee.user_id,
-      email: emailByUserId.get(attendee.user_id) ?? "Unknown",
+      email: emailByUserId!.get(attendee.user_id) ?? "Unknown",
     })),
   }))
 }
 
 export async function getWorkspaceMeetings(
-  workspaceId: string
+  workspaceId: string,
+  emailByUserId?: Map<string, string>
 ): Promise<{ error: string } | { success: true; meetings: Meeting[] }> {
   const supabase = await createClient()
 
@@ -77,7 +81,7 @@ export async function getWorkspaceMeetings(
     return { error: error.message }
   }
 
-  const meetings = await resolveAttendeeEmails(supabase, workspaceId, (data ?? []) as MeetingRow[])
+  const meetings = await resolveAttendeeEmails(supabase, workspaceId, (data ?? []) as MeetingRow[], emailByUserId)
   return { success: true, meetings }
 }
 
@@ -91,9 +95,8 @@ export async function createMeeting(input: {
   attendeeIds: string[]
 }): Promise<{ error: string } | { success: true; meeting: Meeting }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to create a meeting." }
@@ -152,9 +155,8 @@ export async function updateMeeting(
   }
 ): Promise<{ error: string } | { success: true; meeting: Meeting }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to edit a meeting." }
@@ -240,9 +242,8 @@ export async function deleteMeeting(
   meetingId: string
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to delete a meeting." }

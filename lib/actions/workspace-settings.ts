@@ -62,9 +62,8 @@ export async function updateWorkspaceSettings(
   }
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   const { data: previous } = await supabase
     .from("workspaces")
@@ -188,9 +187,8 @@ export async function archiveWorkspace(
   workspaceId: string
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   const { error } = await supabase.rpc("archive_workspace", { p_workspace_id: workspaceId })
 
@@ -210,9 +208,8 @@ export async function unarchiveWorkspace(
   workspaceId: string
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   const { error } = await supabase.rpc("unarchive_workspace", { p_workspace_id: workspaceId })
 

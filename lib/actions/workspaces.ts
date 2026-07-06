@@ -62,9 +62,11 @@ async function seedOnboarding(
   workspaceId: string,
   workspaceSlug: string
 ): Promise<void> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // refreshSession before redirect ensures cookies are flushed to the HTTP
+  // response — getSession alone is read-only and never triggers setAll, so
+  // the middleware's token refresh in the same request gets lost on redirect.
+  const { data: { session } } = await supabase.auth.refreshSession()
+  const user = session?.user
   if (!user) return
 
   const { data: project } = await supabase
@@ -109,9 +111,8 @@ export async function getWorkspaceMembers(workspaceId: string): Promise<
   | { success: true; members: WorkspaceMember[]; currentUserId: string | null }
 > {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   const { data, error } = await supabase.rpc("get_workspace_members_with_email", {
     p_workspace_id: workspaceId,
@@ -129,9 +130,8 @@ export async function removeMember(
   userId: string
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   const { data: members } = await supabase.rpc("get_workspace_members_with_email", {
     p_workspace_id: workspaceId,
@@ -167,9 +167,8 @@ export async function leaveWorkspace(
   workspaceId: string
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to leave a workspace." }
@@ -235,9 +234,8 @@ export async function createInvite(
   invitedEmail?: string
 ): Promise<{ error: string } | { success: true; invite: WorkspaceInvite }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   if (!user) {
     return { error: "You must be signed in to create an invite." }
@@ -276,9 +274,8 @@ export async function revokeInvite(
   inviteId: string
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   const { data, error } = await supabase
     .from("workspace_invites")
@@ -328,9 +325,8 @@ export async function changeMemberRole(
   role: "admin" | "member"
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   const { data: members } = await supabase.rpc("get_workspace_members_with_email", {
     p_workspace_id: workspaceId,
@@ -368,9 +364,8 @@ export async function transferOwnership(
   newOwnerId: string
 ): Promise<{ error: string } | { success: true }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   const { data: members } = await supabase.rpc("get_workspace_members_with_email", {
     p_workspace_id: workspaceId,
@@ -422,9 +417,8 @@ export async function joinWorkspaceViaInvite(
   token: string
 ): Promise<{ error: string } | { success: true; workspaceSlug: string }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
 
   const { data, error } = await supabase.rpc("join_workspace_via_invite", {
     p_token: token,

@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState, useTransition } from "react"
 
+import { createClient } from "@/lib/supabase/client"
 import {
+  createAttachmentRecord,
   deleteAttachment,
   getAttachments,
-  uploadAttachment,
   type Attachment,
 } from "@/lib/actions/attachments"
 
@@ -46,28 +47,49 @@ export function TaskAttachments({
     }
   }, [taskId])
 
-  // Calling uploadAttachment directly (rather than via <form
-  // action={fn}> + useActionState, triggered by a synthetic
-  // requestSubmit() from this input's onChange) — that pattern silently
-  // never reached the server in production for forms inside this
-  // dialog's Radix Portal, even though the file was correctly attached
-  // to the input (confirmed directly: no network request for the
-  // action ever fired, despite working in dev). Every other mutation in
-  // this dialog already calls its action directly from a plain handler;
-  // this brings uploads in line with that proven pattern.
-  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+  // Server actions with file FormData silently never reach the server from
+  // Radix Portal dialogs in production (confirmed: no network request is
+  // ever made). The two-step approach avoids this:
+  //   1. Upload the file directly from the client to Supabase Storage.
+  //   2. Call a server action with just metadata to create the DB record.
+  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     if (!file) return
     setUploadError(null)
     setUploading(true)
-    const formData = new FormData()
-    formData.set("taskId", taskId)
-    formData.set("file", file)
+
+    const supabase = createClient()
+    const lastDotIndex = file.name.lastIndexOf(".")
+    const extension =
+      lastDotIndex > 0
+        ? file.name
+            .slice(lastDotIndex)
+            .toLowerCase()
+            .replace(/[^a-z0-9.]/g, "")
+        : ""
+    const path = `${taskId}/${crypto.randomUUID()}${extension}`
+
+    const { error: uploadError } = await supabase.storage
+      .from("task-attachments")
+      .upload(path, file, { contentType: file.type })
+
+    if (uploadError) {
+      setUploading(false)
+      setUploadError(uploadError.message)
+      return
+    }
+
     startTransition(async () => {
-      const result = await uploadAttachment(undefined, formData)
+      const result = await createAttachmentRecord(
+        taskId,
+        file.name,
+        path,
+        file.size,
+        file.type || null,
+      )
       setUploading(false)
       if (!result || "error" in result) {
-        setUploadError(result?.error ?? "Could not upload attachment.")
+        setUploadError(result?.error ?? "Could not save attachment.")
         return
       }
       const next = [result.attachment, ...attachments]

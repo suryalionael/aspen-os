@@ -58,56 +58,27 @@ export type UploadAttachmentState =
   | { success: true; attachment: Attachment }
   | undefined
 
-export async function uploadAttachment(
-  _prevState: UploadAttachmentState,
-  formData: FormData
+// The file-upload half runs on the client (the Supabase browser client uploads
+// directly to Storage), then this server action creates the DB record, logs the
+// activity, and returns the signed URL — server actions with file FormData
+// silently never reach the server from Radix Portal dialogs in production.
+export async function createAttachmentRecord(
+  taskId: string,
+  fileName: string,
+  filePath: string,
+  fileSize: number,
+  contentType: string | null,
 ): Promise<UploadAttachmentState> {
-  const taskId = String(formData.get("taskId") ?? "")
-  const file = formData.get("file")
-
-  if (!taskId) {
-    return { error: "Missing task." }
-  }
-  if (!(file instanceof File) || file.size === 0) {
-    return { error: "Choose a file to upload." }
-  }
-  if (file.size > MAX_ATTACHMENT_BYTES) {
-    return { error: "Attachments must be smaller than 10MB." }
-  }
-
   const supabase = await createClient()
   const { data: { session } } = await supabase.auth.getSession()
   const user = session?.user
 
   if (!user) {
-    return { error: "You must be signed in to upload an attachment." }
+    return { error: "You must be signed in to save an attachment." }
   }
 
-  // Unlike the avatar bucket's fixed per-user path, a task can hold many
-  // attachments, so each upload gets its own unique path rather than
-  // overwriting a previous one at the same key. The original file.name is
-  // kept as the *displayed* file_name (below), but Supabase Storage's S3-
-  // compatible backend rejects object keys containing spaces and various
-  // punctuation — building the key from an arbitrary filename surfaced
-  // exactly that ("Invalid key") for any upload whose name wasn't plain
-  // ASCII/underscore/hyphen, so the key itself only ever uses the random
-  // UUID plus a sanitized extension.
-  const lastDotIndex = file.name.lastIndexOf(".")
-  const extension =
-    lastDotIndex > 0
-      ? file.name
-          .slice(lastDotIndex)
-          .toLowerCase()
-          .replace(/[^a-z0-9.]/g, "")
-      : ""
-  const path = `${taskId}/${crypto.randomUUID()}${extension}`
-
-  const { error: uploadError } = await supabase.storage
-    .from("task-attachments")
-    .upload(path, file, { contentType: file.type })
-
-  if (uploadError) {
-    return { error: uploadError.message }
+  if (fileSize > MAX_ATTACHMENT_BYTES) {
+    return { error: "Attachments must be smaller than 10MB." }
   }
 
   const { data: row, error: insertError } = await supabase
@@ -115,21 +86,21 @@ export async function uploadAttachment(
     .insert({
       task_id: taskId,
       uploaded_by: user.id,
-      file_name: file.name,
-      file_path: path,
-      file_size: file.size,
-      content_type: file.type || null,
+      file_name: fileName,
+      file_path: filePath,
+      file_size: fileSize,
+      content_type: contentType,
     })
     .select("id, file_name, file_path, file_size, content_type, created_at")
     .single()
 
   if (insertError || !row) {
-    await supabase.storage.from("task-attachments").remove([path])
+    await supabase.storage.from("task-attachments").remove([filePath]).catch(() => {})
     return { error: insertError?.message ?? "Could not save attachment." }
   }
 
   await logActivity(supabase, taskId, user.id, "attachment_added", {
-    file_name: file.name,
+    file_name: fileName,
   })
   const uploadContext = await getTaskNotificationContext(supabase, taskId)
   if (uploadContext) {
@@ -138,13 +109,13 @@ export async function uploadAttachment(
       actorId: user.id,
       action: "task.attachment_added",
       targetLabel: uploadContext.title,
-      metadata: { file_name: file.name },
+      metadata: { file_name: fileName },
     })
   }
 
   const { data: signed } = await supabase.storage
     .from("task-attachments")
-    .createSignedUrl(path, SIGNED_URL_TTL_SECONDS)
+    .createSignedUrl(filePath, SIGNED_URL_TTL_SECONDS)
 
   revalidatePath("/", "layout")
   return {

@@ -127,7 +127,11 @@ async function ProjectContent({
         completedTasks={completedCount}
         averageProgress={averageProgress}
       />
-      <KanbanBoard projectId={project.id} initialTasks={tasksWithLabels} />
+      <KanbanBoard
+        projectId={project.id}
+        initialTasks={tasksWithLabels}
+        assigneeEmailById={new Map(members.map((m: { user_id: string; email: string }) => [m.user_id, m.email]))}
+      />
     </div>
   )
 }

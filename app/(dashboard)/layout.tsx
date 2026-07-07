@@ -47,6 +47,7 @@ export default async function DashboardLayout({
           </span>
           <Link
             href="/account"
+            prefetch={false}
             className="text-xs text-muted-foreground underline-offset-4 hover:underline"
           >
             Account

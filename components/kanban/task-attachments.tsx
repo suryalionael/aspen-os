@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useTransition } from "react"
 
-import { createClient } from "@/lib/supabase/client"
 import {
   createAttachmentRecord,
   deleteAttachment,
@@ -58,6 +57,7 @@ export function TaskAttachments({
     setUploadError(null)
     setUploading(true)
 
+    const { createClient } = await import("@/lib/supabase/client")
     const supabase = createClient()
     const lastDotIndex = file.name.lastIndexOf(".")
     const extension =

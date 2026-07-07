@@ -1,15 +1,23 @@
 "use client"
 
 import { useRouter } from "next/navigation"
+import dynamic from "next/dynamic"
 import { useState } from "react"
 
 import { CalendarView } from "@/components/calendar/calendar-view"
 import { EmptyState } from "@/components/ui/empty-state"
-import { MeetingDialog } from "@/components/calendar/meeting-dialog"
-import { TaskDetailDialog } from "@/components/kanban/task-detail-dialog"
 import { updateTaskDueDate, type EditedTask } from "@/lib/actions/tasks"
 import { rescheduleMeeting, type Meeting } from "@/lib/actions/meetings"
 import type { WorkspaceMember } from "@/lib/actions/workspaces"
+
+const TaskDetailDialog = dynamic(
+  () => import("@/components/kanban/task-detail-dialog").then((mod) => mod.TaskDetailDialog),
+  { ssr: false }
+)
+const MeetingDialog = dynamic(
+  () => import("@/components/calendar/meeting-dialog").then((mod) => mod.MeetingDialog),
+  { ssr: false }
+)
 
 type CalendarTaskInput = {
   id: string

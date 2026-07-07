@@ -1,12 +1,17 @@
 "use client"
 
 import { useState } from "react"
+import dynamic from "next/dynamic"
 
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/ui/empty-state"
-import { NoteDialog } from "@/components/notes/note-dialog"
 import { formatDateTime } from "@/lib/utils/format-date"
 import type { Note, NoteType } from "@/lib/actions/notes"
+
+const NoteDialog = dynamic(
+  () => import("@/components/notes/note-dialog").then((mod) => mod.NoteDialog),
+  { ssr: false }
+)
 
 const TYPE_LABELS: Record<NoteType, string> = {
   document: "Document",

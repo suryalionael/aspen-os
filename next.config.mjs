@@ -1,4 +1,14 @@
 import { withSentryConfig } from "@sentry/nextjs"
+import withBundleAnalyzer from "@next/bundle-analyzer"
+
+const withBA = withBundleAnalyzer({
+  enabled: process.env.ANALYZE === "true",
+  analyzerMode: "static",
+  generateStatsFile: true,
+  statsFilename: "stats.json",
+  reportFilename: "analyze/[name].html",
+  openAnalyzer: false,
+})
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -21,7 +31,7 @@ const nextConfig = {
 
 // Sentry is a no-op until NEXT_PUBLIC_SENTRY_DSN is set.
 // See sentry.*.config.ts and instrumentation.ts for initialization.
-export default withSentryConfig(nextConfig, {
+export default withSentryConfig(withBA(nextConfig), {
   silent: true,
   disableSourceMapUpload: !process.env.SENTRY_AUTH_TOKEN,
 })

@@ -21,6 +21,7 @@ export async function WorkspaceSwitcher() {
     return (
       <Link
         href="/workspaces/new"
+        prefetch={false}
         className="text-sm font-medium text-primary underline-offset-4 hover:underline"
       >
         New workspace
@@ -34,6 +35,7 @@ export async function WorkspaceSwitcher() {
         <span className="text-sm font-medium">{workspaces[0].name}</span>
         <Link
           href="/workspaces/new"
+          prefetch={false}
           className="text-xs text-muted-foreground underline-offset-4 hover:underline"
         >
           New workspace
@@ -47,6 +49,7 @@ export async function WorkspaceSwitcher() {
       <WorkspaceSelect workspaces={workspaces} />
       <Link
         href="/workspaces/new"
+        prefetch={false}
         className="text-xs text-muted-foreground underline-offset-4 hover:underline"
       >
         New workspace

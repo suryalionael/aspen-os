@@ -46,7 +46,7 @@ async function ProjectContent({
   const tasksPromise = supabase
     .from("tasks")
     .select(
-      "id, title, status, description, due_date, priority, assignee_id, created_at, progress, task_labels(labels(id, name, color)), checklist_items(completed), comments(id), task_attachments(id), task_assignees(user_id)"
+      "id, title, status, description, due_date, priority, assignee_id, created_at, progress, task_labels(labels(id, name, color)), checklist_items(completed), comments(count), task_attachments(count), task_assignees(user_id)"
     )
     .eq("project_id", project.id)
     .is("archived_at", null)
@@ -102,8 +102,8 @@ async function ProjectContent({
     ),
     checklistTotal: task.checklist_items.length,
     checklistCompleted: task.checklist_items.filter((item) => item.completed).length,
-    commentCount: task.comments.length,
-    attachmentCount: task.task_attachments.length,
+    commentCount: (task.comments as { count: number }[])?.[0]?.count ?? 0,
+    attachmentCount: (task.task_attachments as { count: number }[])?.[0]?.count ?? 0,
     progress: task.progress,
     assigneeIds: task.task_assignees.map((row) => row.user_id),
   }))

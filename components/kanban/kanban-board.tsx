@@ -23,18 +23,37 @@ import {
 import { getProjectMembers } from "@/lib/actions/projects"
 import type { Label } from "@/lib/labels"
 import { toDateKey } from "@/lib/utils/dates"
-import { createClient } from "@/lib/supabase/client"
 import { useToasts } from "@/lib/hooks/use-toasts"
-import { ArchivedTasksDialog } from "@/components/kanban/archived-tasks-dialog"
 import { BoardToolbar, type SortMode } from "@/components/kanban/board-toolbar"
 import { KanbanColumn } from "@/components/kanban/kanban-column"
 import { TaskCardOverlay } from "@/components/kanban/task-card"
-import { TaskDetailDialog } from "@/components/kanban/task-detail-dialog"
-import { TaskListView } from "@/components/kanban/task-list-view"
-import { TaskTableView } from "@/components/kanban/task-table-view"
-import { ProjectActivityFeed } from "@/components/kanban/project-activity-feed"
-import { ProjectCompletionSidebar } from "@/components/kanban/project-completion-sidebar"
+import { ArchivedTasksDialog } from "@/components/kanban/archived-tasks-dialog"
 import { ToastStack } from "@/components/ui/toast-stack"
+
+// Phase G: these views are not needed on the initial "board" view — they're
+// loaded lazily when the user switches to them, keeping ~120KB of Kanban-only
+// components (dnd-kit already loaded for the board) and ~80KB of dialog
+// code out of the first-load bundle.
+const TaskDetailDialog = dynamic(
+  () => import("@/components/kanban/task-detail-dialog").then((mod) => mod.TaskDetailDialog),
+  { ssr: false }
+)
+const TaskListView = dynamic(
+  () => import("@/components/kanban/task-list-view").then((mod) => mod.TaskListView),
+  { ssr: false }
+)
+const TaskTableView = dynamic(
+  () => import("@/components/kanban/task-table-view").then((mod) => mod.TaskTableView),
+  { ssr: false }
+)
+const ProjectActivityFeed = dynamic(
+  () => import("@/components/kanban/project-activity-feed").then((mod) => mod.ProjectActivityFeed),
+  { ssr: false }
+)
+const ProjectCompletionSidebar = dynamic(
+  () => import("@/components/kanban/project-completion-sidebar").then((mod) => mod.ProjectCompletionSidebar),
+  { ssr: false }
+)
 
 const VIEW_TABS = [
   { value: "board", label: "Board" },
@@ -203,30 +222,35 @@ export function KanbanBoard({
   // with those at zero/empty until the next full reload (the same
   // accepted display-lag tradeoff already used for restored tasks).
   useEffect(() => {
-    const supabase = createClient()
     let cancelled = false
-    let channel: ReturnType<typeof supabase.channel> | null = null
+    let channel: any = null
+    let supabase: any = null
 
-    // Per Supabase's docs ("Custom tokens" section of the Postgres
-    // Changes guide): the auth token must be set on the Realtime client
-    // before connecting to a channel, not after. createBrowserClient
-    // doesn't appear to apply the current session to Realtime on its
-    // own quickly enough — without this explicit, awaited setAuth call
-    // first, the channel reaches SUBSCRIBED but silently never receives
-    // any postgres_changes events (confirmed directly: zero events
-    // arrived even after 30s, with no error, until this fix was added).
-    supabase.auth.getSession().then(({ data }) => {
+    import("@/lib/supabase/client").then(({ createClient }) => {
       if (cancelled) return
-      if (data.session) {
-        supabase.realtime.setAuth(data.session.access_token)
-      }
-      // Phase G: respects the account page's "Show in-app notifications"
-      // toggle (default on) — defaults to enabled rather than disabled so
-      // an unset value (no session, or never-saved preference) doesn't
-      // silently suppress every toast.
-      const notificationsEnabled =
-        data.session?.user.user_metadata?.notifications_enabled !== false
-      channel = buildChannel(data.session?.user.id ?? null, notificationsEnabled)
+      supabase = createClient()
+
+      // Per Supabase's docs ("Custom tokens" section of the Postgres
+      // Changes guide): the auth token must be set on the Realtime client
+      // before connecting to a channel, not after. createBrowserClient
+      // doesn't appear to apply the current session to Realtime on its
+      // own quickly enough — without this explicit, awaited setAuth call
+      // first, the channel reaches SUBSCRIBED but silently never receives
+      // any postgres_changes events (confirmed directly: zero events
+      // arrived even after 30s, with no error, until this fix was added).
+      supabase.auth.getSession().then(({ data }: { data: { session: any } }) => {
+        if (cancelled) return
+        if (data.session) {
+          supabase.realtime.setAuth(data.session.access_token)
+        }
+        // Phase G: respects the account page's "Show in-app notifications"
+        // toggle (default on) — defaults to enabled rather than disabled so
+        // an unset value (no session, or never-saved preference) doesn't
+        // silently suppress every toast.
+        const notificationsEnabled =
+          data.session?.user.user_metadata?.notifications_enabled !== false
+        channel = buildChannel(data.session?.user.id ?? null, notificationsEnabled)
+      })
     })
 
     function buildChannel(currentUserId: string | null, notificationsEnabled: boolean) {
@@ -240,7 +264,7 @@ export function KanbanBoard({
             table: "tasks",
             filter: `project_id=eq.${projectId}`,
           },
-          (payload) => {
+          (payload: any) => {
             if (payload.eventType === "INSERT") {
               const row = payload.new as {
                 created_by: string
@@ -384,7 +408,7 @@ export function KanbanBoard({
 
     return () => {
       cancelled = true
-      if (channel) supabase.removeChannel(channel)
+      if (channel && supabase) supabase.removeChannel(channel)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])

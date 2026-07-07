@@ -63,10 +63,12 @@ test("debug attachment upload flow end-to-end", async ({ page, context }) => {
   await page.waitForTimeout(3000)
   console.log(`  After sign-up: ${page.url()}`)
   
-  // Check if sign-up succeeded — if redirected to sign-in, the account already
-  // exists (previous run), so sign in instead.
-  if (page.url().includes("sign-in")) {
+  // If the URL shows any sign page, the account already exists (previous run)
+  // or sign-up returned an error — sign in instead.
+  if (page.url().includes("sign-")) {
     console.log("  Account exists — signing in instead")
+    await page.goto(`${BASE}/sign-in`, { waitUntil: "networkidle", timeout: 30000 })
+    await page.waitForSelector("#email", { timeout: 10000 })
     await page.fill("#email", EMAIL)
     await page.fill("#password", PASSWORD)
     await page.click('button[type="submit"]')
@@ -75,12 +77,24 @@ test("debug attachment upload flow end-to-end", async ({ page, context }) => {
   }
 
   console.log("\n=== STEP 2: Create workspace and get project ===")
-  await page.goto(`${BASE}/workspaces/new`, { waitUntil: "networkidle", timeout: 30000 })
-  const wsInput = page.locator('input[name="name"]')
+  await page.goto(`${BASE}/workspaces/new`, { waitUntil: "networkidle", timeout: 60000 })
+  await page.waitForTimeout(2000)
+  const pageText = await page.evaluate(() => document.body.innerText.substring(0, 500))
+  console.log(`  Page text: ${JSON.stringify(pageText.substring(0, 300))}`)
+  const htmlSnippet = await page.evaluate(() => document.body.innerHTML.substring(0, 1000))
+  console.log(`  HTML: ${JSON.stringify(htmlSnippet.substring(0, 300))}`)
+  const wsInput = page.locator('#name')
   if (await wsInput.isVisible({ timeout: 5000 }).catch(() => false)) {
     await wsInput.fill(`Attach Flow ${UNIQUE}`)
     await page.getByRole("button", { name: "Create workspace" }).click()
     await page.waitForTimeout(5000)
+  } else {
+    const allInputs = await page.evaluate(() => {
+      return Array.from(document.querySelectorAll('input')).map(el => ({ id: el.id, name: el.name, type: el.type }))
+    })
+    console.log(`  Found inputs: ${JSON.stringify(allInputs)}`)
+    console.log(`  URL: ${page.url()}`)
+    console.log(`  ❌ Input not found, checking sign-in...`)
   }
   const slug = new URL(page.url()).pathname.split("/").filter(Boolean)[0]
   if (slug === "workspaces" || slug.includes("sign-in")) {
@@ -362,46 +376,50 @@ test("debug attachment upload flow end-to-end", async ({ page, context }) => {
             attachInput.click(),
           ])
           if (fileChooser) {
-            // Track requests during upload
+            fileChooser.setFiles(["/tmp/test-attachment.txt"])
+            console.log("  ✅ File selected via dialog")
+            
+            // Track POST requests during upload
             const uploadPhaseRequests: string[] = []
-            const handler = (req: any) => {
+            const reqHandler = (req: any) => {
               if (req.method() === "POST") {
                 const h = req.headers()
                 uploadPhaseRequests.push(`${req.url().substring(0, 120)} action=${h["next-action"] || h["Next-Action"] || "none"} ct=${(h["content-type"] || "").substring(0, 50)}`)
               }
             }
-            page.on("request", handler)
+            page.on("request", reqHandler)
             
-            fileChooser.setFiles(["/tmp/test-attachment.txt"])
-            console.log("  ✅ File selected via dialog")
-            
-            // Wait for upload to complete
-            await page.waitForTimeout(5000)
-            
-            page.off("request", handler)
-            
-            console.log(`  Requests during upload phase: ${uploadPhaseRequests.length}`)
-            uploadPhaseRequests.forEach(r => console.log(`    ${r}`))
-            
-            // Enumerate ALL [role="alert"] elements
-            const allAlerts = await page.evaluate(() => {
-              const alerts = document.querySelectorAll('[role="alert"]')
-              return Array.from(alerts).map((el, i) => ({
-                index: i,
-                text: (el as HTMLElement).innerText || "",
-                html: (el as HTMLElement).outerHTML?.substring(0, 200),
-                className: (el as HTMLElement).className,
-              }))
-            })
-            console.log(`  Visible alerts on page: ${JSON.stringify(allAlerts)}`)
-            
-            // Check if attachment item appeared
+            // Wait for attachment to appear (client upload + server action for DB)
             const attachItem = page.locator('[data-testid="attachment-item"]')
-            if (await attachItem.isVisible({ timeout: 5000 }).catch(() => false)) {
+            let attachmentFound = false
+            try {
+              await attachItem.waitFor({ state: "visible", timeout: 20000 })
               const fileName = await attachItem.locator('a, span').first().textContent()
               console.log(`  ✅ Attachment rendered: "${fileName}"`)
-            } else {
-              console.log("  ℹ️ No attachment item appeared")
+              attachmentFound = true
+            } catch {
+              console.log("  ℹ️ No attachment item appeared within 20s")
+            }
+            
+            page.off("request", reqHandler)
+            
+            console.log(`  POST requests during upload: ${uploadPhaseRequests.length}`)
+            uploadPhaseRequests.slice(-5).forEach(r => console.log(`    ${r}`))
+            
+            // Check for error alerts
+            const alerts = await page.evaluate(() => {
+              return Array.from(document.querySelectorAll('[role="alert"]')).filter(el => el.textContent?.trim()).map(el => el.textContent?.trim())
+            })
+            if (alerts.length > 0) console.log(`  ❌ Alerts: ${JSON.stringify(alerts)}`)
+            
+            if (!attachmentFound) {
+              const state = await page.evaluate(() => ({
+                items: document.querySelectorAll('[data-testid="attachment-item"]').length,
+                uploading: document.body.innerText.includes("Uploading"),
+              }))
+              console.log(`  State: items=${state.items} uploading=${state.uploading}`)
+              const last5 = allPostRequests.slice(-5).map(r => r.nextAction)
+              console.log(`  Last action IDs: ${JSON.stringify(last5)}`)
             }
           } else {
             console.log("  ❌ File chooser did not open")

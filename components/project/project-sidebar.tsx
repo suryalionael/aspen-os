@@ -134,6 +134,7 @@ export function ProjectSidebar({
           </Link>
           <Link
             href={`/${workspaceSlug}/calendar`}
+            prefetch={false}
             onClick={closeDrawer}
             className={navLinkClass(`/${workspaceSlug}/calendar`)}
           >
@@ -141,6 +142,7 @@ export function ProjectSidebar({
           </Link>
           <Link
             href={`/${workspaceSlug}/notes`}
+            prefetch={false}
             onClick={closeDrawer}
             className={navLinkClass(`/${workspaceSlug}/notes`)}
           >
@@ -148,6 +150,7 @@ export function ProjectSidebar({
           </Link>
           <Link
             href={`/${workspaceSlug}/activity`}
+            prefetch={false}
             onClick={closeDrawer}
             className={navLinkClass(`/${workspaceSlug}/activity`)}
           >

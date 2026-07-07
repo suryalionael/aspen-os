@@ -4,7 +4,6 @@ import React, { useEffect, useRef, useState, useTransition } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { createClient } from "@/lib/supabase/client"
 import {
   addComment,
   deleteComment,
@@ -93,21 +92,26 @@ export function TaskComments({
   // fixed-position element risks landing behind the dialog's own overlay
   // depending on stacking context — an inline banner has no such risk.
   useEffect(() => {
-    const supabase = createClient()
     let cancelled = false
-    let channel: ReturnType<typeof supabase.channel> | null = null
+    let channel: any = null
+    let supabase: any = null
 
-    // Per Supabase's docs (Postgres Changes guide, "Custom tokens"): the
-    // auth token must be set on the Realtime client before connecting to
-    // a channel, not after — confirmed directly in kanban-board.tsx (the
-    // same fix), where omitting this left the channel SUBSCRIBED but
-    // silently receiving zero events, with no error.
-    supabase.auth.getSession().then(({ data }) => {
+    import("@/lib/supabase/client").then(({ createClient }) => {
       if (cancelled) return
-      if (data.session) {
-        supabase.realtime.setAuth(data.session.access_token)
-      }
-      channel = buildChannel()
+      supabase = createClient()
+
+      // Per Supabase's docs (Postgres Changes guide, "Custom tokens"): the
+      // auth token must be set on the Realtime client before connecting to
+      // a channel, not after — confirmed directly in kanban-board.tsx (the
+      // same fix), where omitting this left the channel SUBSCRIBED but
+      // silently receiving zero events, with no error.
+      supabase.auth.getSession().then(({ data }: { data: { session: any } }) => {
+        if (cancelled) return
+        if (data.session) {
+          supabase.realtime.setAuth(data.session.access_token)
+        }
+        channel = buildChannel()
+      })
     })
 
     function buildChannel() {
@@ -121,7 +125,7 @@ export function TaskComments({
             table: "comments",
             filter: `task_id=eq.${taskId}`,
           },
-          (payload) => {
+          (payload: any) => {
             if (payload.eventType === "INSERT") {
               const row = payload.new as Comment
               if (wasRecentlyTouched(row.id)) return
@@ -157,7 +161,7 @@ export function TaskComments({
 
     return () => {
       cancelled = true
-      if (channel) supabase.removeChannel(channel)
+      if (channel && supabase) supabase.removeChannel(channel)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId])

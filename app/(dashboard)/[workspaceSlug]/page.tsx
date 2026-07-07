@@ -153,47 +153,17 @@ async function DashboardContent({
     .toISOString()
     .slice(0, 10)
 
-  const [assignedLegacyResult, assignedViaJoinResult, dueTodayResult, upcomingResult, favoritesResult, taskIdsResult, notesResult, todayMeetingsResult] =
+  const [allTasksResult, favoritesResult, notesResult, todayMeetingsResult] =
     await Promise.all([
       supabase
         .from("tasks")
-        .select("id, title, project_id, due_date, priority")
-        .in("project_id", projectIds)
-        .eq("assignee_id", userId)
-        .is("archived_at", null)
-        .neq("status", "done")
-        .order("due_date", { ascending: true, nullsFirst: false })
-        .limit(10),
-      supabase
-        .from("task_assignees")
-        .select("task_id, tasks!inner(id, title, project_id, due_date, priority, status, archived_at)")
-        .eq("user_id", userId)
-        .in("tasks.project_id", projectIds),
-      supabase
-        .from("tasks")
-        .select("id, title, project_id, due_date, priority")
-        .in("project_id", projectIds)
-        .eq("due_date", today)
-        .is("archived_at", null)
-        .neq("status", "done")
-        .order("priority", { ascending: true })
-        .limit(10),
-      supabase
-        .from("tasks")
-        .select("id, title, project_id, due_date, priority")
-        .in("project_id", projectIds)
-        .gt("due_date", today)
-        .lte("due_date", weekAhead)
-        .is("archived_at", null)
-        .neq("status", "done")
-        .order("due_date", { ascending: true })
-        .limit(10),
+        .select("id, title, project_id, due_date, priority, status, assignee_id, created_at, archived_at, task_assignees(user_id)")
+        .in("project_id", projectIds),
       supabase
         .from("project_favorites")
         .select("project_id")
         .eq("user_id", userId)
         .in("project_id", projectIds),
-      supabase.from("tasks").select("id, title, project_id").in("project_id", projectIds),
       getWorkspaceNotes(workspace.id),
       supabase
         .from("meetings")
@@ -204,19 +174,21 @@ async function DashboardContent({
         .order("start_time", { ascending: true }),
     ])
 
-  const assignedSeen = new Set<string>()
+  const allTasks = allTasksResult.data ?? []
   const assignedMerged: DashboardTask[] = []
-  for (const task of assignedLegacyResult.data ?? []) {
-    if (!assignedSeen.has(task.id)) {
+  const assignedSeen = new Set<string>()
+  for (const task of allTasks) {
+    if (task.archived_at || task.status === "done") continue
+    const isAssigned = task.assignee_id === userId || task.task_assignees?.some((a: { user_id: string }) => a.user_id === userId)
+    if (isAssigned && !assignedSeen.has(task.id)) {
       assignedSeen.add(task.id)
-      assignedMerged.push(task)
-    }
-  }
-  for (const row of assignedViaJoinResult.data ?? []) {
-    const task = row.tasks as unknown as DashboardTask & { status: string; archived_at: string | null }
-    if (!assignedSeen.has(task.id) && task.status !== "done" && task.archived_at === null) {
-      assignedSeen.add(task.id)
-      assignedMerged.push(task)
+      assignedMerged.push({
+        id: task.id,
+        title: task.title,
+        project_id: task.project_id,
+        due_date: task.due_date,
+        priority: task.priority,
+      })
     }
   }
   assignedMerged.sort((a, b) => {
@@ -226,14 +198,22 @@ async function DashboardContent({
     return a.due_date < b.due_date ? -1 : 1
   })
 
+  const dueToday = allTasks.filter((
+    t: { due_date: string | null; status: string; archived_at: string | null }
+  ) => t.due_date === today && !t.archived_at && t.status !== "done")
+
+  const upcoming = allTasks.filter((
+    t: { due_date: string | null; status: string; archived_at: string | null }
+  ) => t.due_date && t.due_date > today && t.due_date <= weekAhead && !t.archived_at && t.status !== "done")
+
   const announcements = ("success" in notesResult ? notesResult.notes : [])
     .filter((note) => note.type === "announcement")
     .slice(0, 3)
 
   const taskById = new Map(
-    (taskIdsResult.data ?? []).map((task) => [task.id, { title: task.title, project_id: task.project_id }])
+    allTasks.map((task) => [task.id, { title: task.title, project_id: task.project_id }])
   )
-  const allTaskIds = (taskIdsResult.data ?? []).map((task) => task.id)
+  const allTaskIds = allTasks.map((task) => task.id)
   const todayMeetings = todayMeetingsResult.data ?? []
 
   const [{ data: activity }, { data: members }] = await Promise.all([
@@ -289,9 +269,9 @@ async function DashboardContent({
         <Card>
           <CardHeader><CardTitle className="text-base">Due today</CardTitle></CardHeader>
           <CardContent>
-            {dueTodayResult.data?.length ? (
+            {dueToday.length ? (
               <ul className="flex flex-col gap-1">
-                {dueTodayResult.data.map((task) => (
+                {dueToday.map((task) => (
                   <TaskRow key={task.id} task={task} workspaceSlug={workspaceSlug} projectName={projectNameById.get(task.project_id) ?? ""} />
                 ))}
               </ul>
@@ -323,9 +303,9 @@ async function DashboardContent({
         <Card>
           <CardHeader><CardTitle className="text-base">Upcoming deadlines</CardTitle></CardHeader>
           <CardContent>
-            {upcomingResult.data?.length ? (
+            {upcoming.length ? (
               <ul className="flex flex-col gap-1">
-                {upcomingResult.data.map((task) => (
+                {upcoming.map((task) => (
                   <TaskRow key={task.id} task={task} workspaceSlug={workspaceSlug} projectName={projectNameById.get(task.project_id) ?? ""} />
                 ))}
               </ul>

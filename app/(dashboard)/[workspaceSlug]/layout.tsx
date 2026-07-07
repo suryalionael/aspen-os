@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 
 import { createClient } from "@/lib/supabase/server"
-import { getWorkspaceBySlug } from "@/lib/data/workspace"
+import { getWorkspaceBySlug, getProjectsForWorkspace } from "@/lib/data/workspace"
 import { ProjectSidebar } from "@/components/project/project-sidebar"
 import { LazyCommandPalette } from "@/components/lazy-cmd"
 
@@ -15,30 +15,28 @@ export default async function WorkspaceLayout({
   const { workspaceSlug } = await params
   const supabase = await createClient()
 
-  const workspace = await getWorkspaceBySlug(workspaceSlug)
+  const [workspace, { data: { session } }] = await Promise.all([
+    getWorkspaceBySlug(workspaceSlug),
+    supabase.auth.getSession(),
+  ])
 
   if (!workspace) {
     notFound()
   }
 
-  const { data: projects } = await supabase
-    .from("projects")
-    .select("id, name, project_favorites(user_id)")
-    .eq("workspace_id", workspace.id)
-    .is("archived_at", null)
-    .order("created_at", { ascending: true })
-
-  const { data: { session } } = await supabase.auth.getSession()
   const user = session?.user
 
-  const { data: membership } = await supabase
-    .from("workspace_members")
-    .select("role")
-    .eq("workspace_id", workspace.id)
-    .eq("user_id", user?.id ?? "")
-    .maybeSingle()
+  const [projects, { data: membership }] = await Promise.all([
+    getProjectsForWorkspace(workspace.id),
+    supabase
+      .from("workspace_members")
+      .select("role")
+      .eq("workspace_id", workspace.id)
+      .eq("user_id", user?.id ?? "")
+      .maybeSingle(),
+  ])
 
-  const projectsWithFavorite = (projects ?? []).map((project) => ({
+  const projectsWithFavorite = projects.map((project) => ({
     id: project.id,
     name: project.name,
     isFavorite: project.project_favorites.some((row) => row.user_id === user?.id),

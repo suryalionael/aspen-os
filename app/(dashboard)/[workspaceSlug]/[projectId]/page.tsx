@@ -1,16 +1,32 @@
 import { notFound } from "next/navigation"
+import { Suspense } from "react"
 
 import { createClient } from "@/lib/supabase/server"
 import { KanbanBoard } from "@/components/kanban/kanban-board"
 import { ProjectHeader } from "@/components/project/project-header"
 import { getAverageProgress } from "@/lib/utils/task-progress"
 
-export default async function ProjectPage({
-  params,
+function ProjectSkeleton() {
+  return (
+    <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-6">
+      <div className="h-8 w-64 animate-pulse rounded-md bg-muted" />
+      <div className="h-4 w-96 animate-pulse rounded-md bg-muted" />
+      <div className="grid grid-cols-4 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-48 animate-pulse rounded-lg bg-muted" />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+async function ProjectContent({
+  projectId,
+  workspaceSlug,
 }: {
-  params: Promise<{ workspaceSlug: string; projectId: string }>
+  projectId: string
+  workspaceSlug: string
 }) {
-  const { projectId, workspaceSlug } = await params
   const supabase = await createClient()
 
   const { data: project } = await supabase
@@ -26,24 +42,42 @@ export default async function ProjectPage({
   // All queries after the project fetch are independent — run them in
   // parallel to eliminate sequential round-trips (saves ~400-800ms per
   // page load given cross-region Supabase latency).
+  const sessionPromise = supabase.auth.getSession()
+  const tasksPromise = supabase
+    .from("tasks")
+    .select(
+      "id, title, status, description, due_date, priority, assignee_id, created_at, progress, task_labels(labels(id, name, color)), checklist_items(completed), comments(id), task_attachments(id), task_assignees(user_id)"
+    )
+    .eq("project_id", project.id)
+    .is("archived_at", null)
+    .order("status", { ascending: true })
+    .order("position", { ascending: true })
+  const membersRpcPromise = supabase.rpc("get_workspace_members_with_email", {
+    p_workspace_id: project.workspace_id,
+  })
+
+  // Membership check depends on user id from session, but session is fast
+  // (local JWT decode, ~5ms). Chain it off session so it overlaps with the
+  // longer tasks/members queries instead of running sequentially after them.
+  const membershipPromise = sessionPromise.then(({ data: { session } }) =>
+    supabase
+      .from("workspace_members")
+      .select("role")
+      .eq("workspace_id", project.workspace_id)
+      .eq("user_id", session?.user?.id ?? "")
+      .maybeSingle()
+  )
+
   const [
     { data: { session } },
     { data: tasks },
     { data: memberRows },
+    { data: membership },
   ] = await Promise.all([
-    supabase.auth.getSession(),
-    supabase
-      .from("tasks")
-      .select(
-        "id, title, status, description, due_date, priority, assignee_id, created_at, progress, task_labels(labels(id, name, color)), checklist_items(completed), comments(id), task_attachments(id), task_assignees(user_id)"
-      )
-      .eq("project_id", project.id)
-      .is("archived_at", null)
-      .order("status", { ascending: true })
-      .order("position", { ascending: true }),
-    supabase.rpc("get_workspace_members_with_email", {
-      p_workspace_id: project.workspace_id,
-    }),
+    sessionPromise,
+    tasksPromise,
+    membersRpcPromise,
+    membershipPromise,
   ])
   const user = session?.user
 
@@ -51,14 +85,6 @@ export default async function ProjectPage({
     user_id: member.user_id,
     email: member.email,
   }))
-
-  // Membership check only needs userId — run after user is resolved.
-  const { data: membership } = await supabase
-    .from("workspace_members")
-    .select("role")
-    .eq("workspace_id", project.workspace_id)
-    .eq("user_id", user?.id ?? "")
-    .maybeSingle()
   const isAdminOrOwner = membership?.role === "owner" || membership?.role === "admin"
   const isFavorite = project.project_favorites.some((row) => row.user_id === user?.id)
 
@@ -103,5 +129,19 @@ export default async function ProjectPage({
       />
       <KanbanBoard projectId={project.id} initialTasks={tasksWithLabels} />
     </div>
+  )
+}
+
+export default async function ProjectPage({
+  params,
+}: {
+  params: Promise<{ workspaceSlug: string; projectId: string }>
+}) {
+  const { projectId, workspaceSlug } = await params
+
+  return (
+    <Suspense fallback={<ProjectSkeleton />}>
+      <ProjectContent projectId={projectId} workspaceSlug={workspaceSlug} />
+    </Suspense>
   )
 }

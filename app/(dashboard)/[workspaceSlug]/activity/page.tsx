@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import { Suspense } from "react"
 
 import { createClient } from "@/lib/supabase/server"
-import { getWorkspaceBySlug } from "@/lib/data/workspace"
+import { getWorkspaceBySlug, getProjectsForWorkspace } from "@/lib/data/workspace"
 import { formatDateTime } from "@/lib/utils/format-date"
 import { describeActivity } from "@/lib/utils/activity-labels"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -31,15 +31,9 @@ async function ActivityContent({
   timezone: string | null
 }) {
   const supabase = await createClient()
-
-  const { data: projects } = await supabase
-    .from("projects")
-    .select("id, name")
-    .eq("workspace_id", workspaceId)
-    .is("archived_at", null)
-
-  const projectIds = (projects ?? []).map((project) => project.id)
-  const projectNameById = new Map((projects ?? []).map((project) => [project.id, project.name]))
+  const projects = await getProjectsForWorkspace(workspaceId)
+  const projectIds = projects.map((project) => project.id)
+  const projectNameById = new Map(projects.map((project) => [project.id, project.name]))
 
   const { data: taskRows } =
     projectIds.length > 0

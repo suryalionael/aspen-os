@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import { Suspense } from "react"
 
 import { createClient } from "@/lib/supabase/server"
-import { getWorkspaceBySlug } from "@/lib/data/workspace"
+import { getWorkspaceBySlug, getProjectsForWorkspace } from "@/lib/data/workspace"
 import { getWorkspaceNotes } from "@/lib/actions/notes"
 import { formatDateTime } from "@/lib/utils/format-date"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -392,13 +392,9 @@ export default async function WorkspaceHomePage({
   const { data: { session } } = await supabase.auth.getSession()
   const user = session?.user
 
-  const { data: projects } = await supabase
-    .from("projects")
-    .select("id, name")
-    .eq("workspace_id", workspace.id)
-    .is("archived_at", null)
+  const projects = await getProjectsForWorkspace(workspace.id)
 
-  if (!user || !projects?.length) {
+  if (!user || !projects.length) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
         <span className="text-5xl">🌱</span>

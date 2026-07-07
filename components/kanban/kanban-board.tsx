@@ -20,7 +20,6 @@ import {
   type ArchivedTask,
   type EditedTask,
 } from "@/lib/actions/tasks"
-import { getProjectMembers } from "@/lib/actions/projects"
 import type { Label } from "@/lib/labels"
 import { toDateKey } from "@/lib/utils/dates"
 import { useToasts } from "@/lib/hooks/use-toasts"
@@ -125,9 +124,11 @@ function groupByStatus(tasks: Task[]): TasksByStatus {
 export function KanbanBoard({
   projectId,
   initialTasks,
+  assigneeEmailById: initialAssigneeEmailById,
 }: {
   projectId: string
   initialTasks: Task[]
+  assigneeEmailById?: Map<string, string>
 }) {
   const [tasksByStatus, setTasksByStatus] = useState<TasksByStatus>(() =>
     groupByStatus(initialTasks)
@@ -156,25 +157,10 @@ export function KanbanBoard({
   const [priorityFilter, setPriorityFilter] = useState("")
   const [labelFilter, setLabelFilter] = useState("")
   const [sortMode, setSortMode] = useState<SortMode>("manual")
-  const [assigneeEmailById, setAssigneeEmailById] = useState<Map<string, string>>(new Map())
+  const [assigneeEmailById] = useState<Map<string, string>>(() => initialAssigneeEmailById ?? new Map())
   const [viewMode, setViewMode] = useState<ViewMode>("board")
   const { toasts, pushToast } = useToasts()
   const recentlyTouched = useRef<Map<string, number>>(new Map())
-
-  // Needed for the assignee sort/badge on TaskCard — fetched once per
-  // project, same RPC the assignee picker in TaskDetailDialog already uses.
-  useEffect(() => {
-    let active = true
-    getProjectMembers(projectId).then((result) => {
-      if (!active) return
-      if ("success" in result) {
-        setAssigneeEmailById(new Map(result.members.map((member) => [member.user_id, member.email])))
-      }
-    })
-    return () => {
-      active = false
-    }
-  }, [projectId])
 
   // Phase J keyboard shortcuts: "c" focuses the quick-add input, "/"
   // focuses the search box. Ignored while typing in any field (so typing

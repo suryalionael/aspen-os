@@ -9,12 +9,11 @@ import {
   searchFiles,
   listRecentFiles,
   listTrashedFiles,
-  listSharedWithMe,
   trashFile,
   restoreFile,
   renameFile,
-  uploadFile,
   starFile,
+  uploadFile,
 } from "@/lib/drive/actions"
 import { DriveBreadcrumbs } from "@/components/workspace/drive-breadcrumbs"
 import { DriveToolbar } from "@/components/workspace/drive-toolbar"
@@ -23,7 +22,7 @@ import { DriveGridItem, DriveListItem } from "@/components/workspace/drive-file-
 import { NewFolderDialog } from "@/components/workspace/drive-new-folder-dialog"
 import { Button } from "@/components/ui/button"
 
-type ViewType = "root" | "recent" | "starred" | "shared" | "trash"
+type ViewType = "root" | "recent" | "starred" | "trash"
 
 type Breadcrumb = { id: string; name: string }
 
@@ -56,9 +55,6 @@ export function WorkspaceExplorer() {
         switch (currentView) {
           case "recent":
             result = await listRecentFiles()
-            break
-          case "shared":
-            result = await listSharedWithMe()
             break
           case "trash":
             result = await listTrashedFiles()
@@ -244,9 +240,7 @@ export function WorkspaceExplorer() {
                   ? "No files in trash."
                   : currentView === "recent"
                     ? "No recently modified files."
-                    : currentView === "shared"
-                      ? "No files shared with you."
-                      : searchQuery
+                    : searchQuery
                         ? "No files match your search."
                         : "Upload files or create a folder to get started."}
             </p>

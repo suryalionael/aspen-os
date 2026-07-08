@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { Bot, Send, X, Loader2, AlertCircle, Sparkles, Search, FileText, Users, Folder } from "lucide-react"
+import ReactMarkdown from "react-markdown"
+import { Bot, Send, X, Loader2, Search, Sparkles } from "lucide-react"
 
 import { processAIRequest } from "@/lib/ai/actions"
 import type { AIStreamChunk } from "@/lib/ai/types"
@@ -17,7 +18,7 @@ type Message = {
 
 const SUGGESTIONS = [
   "What should I work on today?",
-  "Show overdue tasks",
+  "Show completed tasks",
   "Summarize all projects",
   "Find files in Drive",
   "Where is the latest document?",
@@ -36,7 +37,8 @@ export function AspenAIPanel({
     {
       id: "welcome",
       role: "assistant",
-      content: "I'm Aspen AI. Ask me about your projects, tasks, files, or team.",
+      content:
+        "I'm **Aspen AI**. Ask me about your projects, tasks, files, or team — I'll retrieve real data and give you a structured response.",
     },
   ])
   const [input, setInput] = useState("")
@@ -93,7 +95,7 @@ export function AspenAIPanel({
           {
             id: crypto.randomUUID(),
             role: "assistant",
-            content: errorContent,
+            content: `⚠️ ${errorContent}`,
           },
         ])
       } else if (assistantContent) {
@@ -126,7 +128,7 @@ export function AspenAIPanel({
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: err instanceof Error ? err.message : "An unexpected error occurred.",
+          content: `⚠️ ${err instanceof Error ? err.message : "An unexpected error occurred."}`,
         },
       ])
     } finally {
@@ -142,40 +144,93 @@ export function AspenAIPanel({
   }
 
   return (
-    <div className="fixed inset-y-0 right-0 z-40 flex w-96 flex-col border-l border-border bg-background shadow-xl">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Bot className="h-5 w-5 text-primary" />
-          <span className="font-semibold">Aspen AI</span>
+    <div className="fixed inset-y-0 right-0 z-40 flex w-[28rem] flex-col border-l border-border bg-background shadow-2xl">
+      <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+            <Bot className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <span className="text-sm font-semibold">Aspen AI</span>
+            <p className="text-[11px] text-muted-foreground">Workplace intelligence</p>
+          </div>
         </div>
-        <Button type="button" variant="ghost" size="icon" onClick={onClose}>
+        <Button type="button" variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
           <X className="h-4 w-4" />
         </Button>
       </div>
 
-      <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
+      <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`flex flex-col gap-1 ${
-              msg.role === "user" ? "items-end" : "items-start"
-            }`}
+            className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
           >
             <div
-              className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${
+              className={`max-w-[90%] ${
                 msg.role === "user"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary/50 text-foreground"
+                  ? "rounded-2xl rounded-tr-md bg-primary px-4 py-2.5 text-sm text-primary-foreground"
+                  : "w-full"
               }`}
             >
-              {msg.content}
+              {msg.role === "user" ? (
+                <p className="leading-relaxed">{msg.content}</p>
+              ) : (
+                <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none leading-relaxed">
+                  <ReactMarkdown
+                    components={{
+                      table({ children }) {
+                        return (
+                          <div className="my-2 overflow-x-auto rounded-lg border border-border">
+                            <table className="min-w-full divide-y divide-border text-xs">
+                              {children}
+                            </table>
+                          </div>
+                        )
+                      },
+                      thead({ children }) {
+                        return <thead className="bg-muted/50">{children}</thead>
+                      },
+                      th({ children }) {
+                        return (
+                          <th className="px-3 py-2 text-left font-medium text-muted-foreground">
+                            {children}
+                          </th>
+                        )
+                      },
+                      td({ children }) {
+                        return <td className="px-3 py-2">{children}</td>
+                      },
+                      tr({ children }) {
+                        return <tr className="border-b border-border last:border-0">{children}</tr>
+                      },
+                      code({ className, children, ...props }) {
+                        const isInline = !className
+                        return isInline ? (
+                          <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">
+                            {children}
+                          </code>
+                        ) : (
+                          <pre className="overflow-x-auto rounded-lg bg-muted p-3 text-xs">
+                            <code className={className} {...props}>
+                              {children}
+                            </code>
+                          </pre>
+                        )
+                      },
+                    }}
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
+                </div>
+              )}
             </div>
             {msg.toolCalls && msg.toolCalls.length > 0 && (
-              <div className="mt-1 flex flex-wrap gap-1">
+              <div className="mb-1 mt-2 flex flex-wrap gap-1.5">
                 {msg.toolCalls.map((tc, i) => (
                   <span
                     key={i}
-                    className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
+                    className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary/30 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
                   >
                     <Search className="h-3 w-3" />
                     {tc.name.replace(/_/g, " ")}
@@ -187,9 +242,10 @@ export function AspenAIPanel({
         ))}
 
         {processing && (
-          <div className="flex items-start gap-2">
-            <div className="rounded-xl bg-secondary/50 px-3 py-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
+          <div className="flex items-start gap-3">
+            <div className="flex items-center gap-2 rounded-2xl bg-secondary/50 px-4 py-3">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Thinking…</span>
             </div>
           </div>
         )}
@@ -198,21 +254,25 @@ export function AspenAIPanel({
       </div>
 
       {messages.length === 1 && (
-        <div className="flex flex-wrap gap-2 px-4 pb-2">
+        <div className="flex flex-wrap gap-2 px-5 pb-3">
           {SUGGESTIONS.map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => handleSuggestion(s)}
-              className="rounded-full border border-border bg-secondary/30 px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/20 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-secondary/40 hover:text-foreground"
             >
+              <Sparkles className="h-3 w-3" />
               {s}
             </button>
           ))}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="flex items-center gap-2 border-t border-border p-3">
+      <form
+        onSubmit={handleSubmit}
+        className="flex items-center gap-2 border-t border-border px-5 py-3"
+      >
         <Input
           ref={inputRef}
           type="text"
@@ -220,13 +280,13 @@ export function AspenAIPanel({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           disabled={processing}
-          className="h-9 text-sm"
+          className="h-10 rounded-xl border-border bg-muted/50 text-sm placeholder:text-muted-foreground/60"
         />
         <Button
           type="submit"
           size="icon"
           disabled={processing || !input.trim()}
-          className="h-9 w-9"
+          className="h-10 w-10 shrink-0 rounded-xl"
         >
           <Send className="h-4 w-4" />
         </Button>

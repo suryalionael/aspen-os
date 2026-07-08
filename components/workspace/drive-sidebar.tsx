@@ -6,7 +6,6 @@ import {
   FolderOpen,
   Clock,
   Star,
-  Share2,
   Trash2,
   ChevronRight,
   ChevronDown,
@@ -16,7 +15,7 @@ import type { DriveFolderTree } from "@/lib/drive/types"
 import { getFolderTree } from "@/lib/drive/actions"
 import { cn } from "@/lib/utils"
 
-type ViewType = "root" | "recent" | "starred" | "shared" | "trash"
+type ViewType = "root" | "recent" | "starred" | "trash"
 
 function FolderTreeItem({
   node,
@@ -100,7 +99,6 @@ export function DriveSidebar({
     { type: "root", label: "My Drive", icon: <Folder className="h-4 w-4" /> },
     { type: "recent", label: "Recent", icon: <Clock className="h-4 w-4" /> },
     { type: "starred", label: "Starred", icon: <Star className="h-4 w-4" /> },
-    { type: "shared", label: "Shared with me", icon: <Share2 className="h-4 w-4" /> },
     { type: "trash", label: "Trash", icon: <Trash2 className="h-4 w-4" /> },
   ]
 

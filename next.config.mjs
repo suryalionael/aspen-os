@@ -13,9 +13,10 @@ const withBA = withBundleAnalyzer({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    // Raise the 1 MB default body limit for Server Actions so that logo and
-    // avatar uploads (validated at 2 MB in the action itself) can reach the
-    // server before Next.js rejects them and triggers the error boundary.
+    // Increased for Google Drive uploads which use a two-phase approach:
+    // Phase 1 (server): small metadata request to create resumable upload URL
+    // Phase 2 (client): direct upload to Google with XHR progress tracking
+    // The server action limit covers the metadata + parentId, not the file body.
     serverActions: { bodySizeLimit: "4mb" },
   },
   images: {

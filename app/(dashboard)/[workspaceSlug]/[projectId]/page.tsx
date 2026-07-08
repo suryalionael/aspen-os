@@ -4,6 +4,7 @@ import { Suspense } from "react"
 import { createClient } from "@/lib/supabase/server"
 import { KanbanBoard } from "@/components/kanban/kanban-board"
 import { ProjectHeader } from "@/components/project/project-header"
+import { ProjectTabNav } from "@/components/project/project-tab-nav"
 import { getAverageProgress } from "@/lib/utils/task-progress"
 
 function ProjectSkeleton() {
@@ -127,6 +128,13 @@ async function ProjectContent({
         completedTasks={completedCount}
         averageProgress={averageProgress}
       />
+      <div className="border-b border-border/60 px-6">
+        <ProjectTabNav
+          workspaceSlug={workspaceSlug}
+          projectId={project.id}
+          activeTab="tasks"
+        />
+      </div>
       <KanbanBoard
         projectId={project.id}
         initialTasks={tasksWithLabels}

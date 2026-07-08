@@ -18,6 +18,7 @@ import {
 } from "@/lib/drive/types"
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3"
+const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3"
 const FIELDS =
   "id,name,mimeType,size,modifiedTime,createdTime,owners,lastModifyingUser,iconLink,thumbnailLink,webViewLink,webContentLink,parents,starred,trashed,capabilities"
 
@@ -359,7 +360,7 @@ export async function getUploadUrl(
     }
 
     const metadataResponse = await fetch(
-      `${DRIVE_API}/files?fields=${FIELDS}&uploadType=resumable`,
+      `${UPLOAD_API}/files?uploadType=resumable`,
       {
         method: "POST",
         headers: {
@@ -382,7 +383,6 @@ export async function getUploadUrl(
     const uploadUrl = metadataResponse.headers.get("location")
     if (!uploadUrl) return { error: "No upload URL returned" }
 
-    const fileLocation = metadataResponse.headers.get("x-goog-request-received") || ""
     return { success: true, uploadUrl, fileId: "pending" }
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Failed to initiate upload" }
@@ -416,7 +416,7 @@ export async function uploadFile(
     }
 
     const metadataResponse = await fetch(
-      `${DRIVE_API}/files?fields=${FIELDS}&uploadType=resumable`,
+      `${UPLOAD_API}/files?uploadType=resumable`,
       {
         method: "POST",
         headers: {

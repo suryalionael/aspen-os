@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Upload, File, X, CheckCircle, AlertCircle, Loader2 } from "lucide-react"
 
 import { getUploadUrl, uploadFile } from "@/lib/drive/actions"
@@ -33,6 +33,15 @@ export function UploadDialog({
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (open) reset()
+  }, [open])
+
+  function handleDialogClose(open: boolean) {
+    if (!open) reset()
+    onOpenChange(open)
+  }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -139,7 +148,7 @@ export function UploadDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleDialogClose}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Upload file</DialogTitle>

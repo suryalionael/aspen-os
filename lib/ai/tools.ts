@@ -61,7 +61,7 @@ export const AI_TOOLS: AITool[] = [
     type: "function",
     function: {
       name: "search_drive",
-      description: "Search Google Drive files by name within the Aspen Workspace folder.",
+      description: "Search for files and folders by name within the Aspen Training Centre Workspace.",
       parameters: {
         type: "object",
         properties: {
@@ -89,7 +89,7 @@ export const AI_TOOLS: AITool[] = [
     type: "function",
     function: {
       name: "analyze_drive_folder",
-      description: "Find a folder by name within Aspen Workspace, then recursively scan its contents and return a structured analysis with folder structure, file types, sizes, and insights.",
+      description: "Find a folder by name within the Aspen Training Centre Workspace, then recursively scan its contents and return a structured analysis with folder structure, file types, sizes, and insights.",
       parameters: {
         type: "object",
         properties: {

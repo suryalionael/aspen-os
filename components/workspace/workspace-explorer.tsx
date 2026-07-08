@@ -1,18 +1,13 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { FolderOpen, File, RefreshCw, Upload } from "lucide-react"
+import { FolderOpen, RefreshCw, Upload } from "lucide-react"
 
 import type { DriveFile, DriveViewMode, DriveSortField, DriveSortOrder } from "@/lib/drive/types"
 import {
   listFiles,
   searchFiles,
-  listRecentFiles,
-  listTrashedFiles,
   trashFile,
-  restoreFile,
-  renameFile,
-  starFile,
   uploadFile,
 } from "@/lib/drive/actions"
 import { DriveBreadcrumbs } from "@/components/workspace/drive-breadcrumbs"
@@ -22,12 +17,9 @@ import { DriveGridItem, DriveListItem } from "@/components/workspace/drive-file-
 import { NewFolderDialog } from "@/components/workspace/drive-new-folder-dialog"
 import { Button } from "@/components/ui/button"
 
-type ViewType = "root" | "recent" | "starred" | "trash"
-
 type Breadcrumb = { id: string; name: string }
 
 export function WorkspaceExplorer() {
-  const [currentView, setCurrentView] = useState<ViewType>("root")
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
   const [breadcrumbs, setBreadcrumbs] = useState<Breadcrumb[]>([])
   const [files, setFiles] = useState<DriveFile[]>([])
@@ -38,8 +30,6 @@ export function WorkspaceExplorer() {
   const [sortOrder, setSortOrder] = useState<DriveSortOrder>("asc")
   const [searchQuery, setSearchQuery] = useState("")
   const [newFolderOpen, setNewFolderOpen] = useState(false)
-  const [renamingFile, setRenamingFile] = useState<string | null>(null)
-  const [renameValue, setRenameValue] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const fetchFiles = useCallback(async () => {
@@ -47,24 +37,11 @@ export function WorkspaceExplorer() {
     setError(null)
 
     try {
-      let result: { files: DriveFile[]; nextPageToken: string | null }
+      const result = searchQuery
+        ? await searchFiles(searchQuery)
+        : await listFiles(currentFolderId ?? undefined)
 
-      if (searchQuery) {
-        result = await searchFiles(searchQuery)
-      } else {
-        switch (currentView) {
-          case "recent":
-            result = await listRecentFiles()
-            break
-          case "trash":
-            result = await listTrashedFiles()
-            break
-          default:
-            result = await listFiles(currentFolderId ?? "root")
-        }
-      }
-
-      let sorted = [...result.files]
+      const sorted = [...result.files]
       const folders = sorted.filter((f) => f.fileType === "folder")
       const nonFolders = sorted.filter((f) => f.fileType !== "folder")
 
@@ -85,34 +62,27 @@ export function WorkspaceExplorer() {
     } finally {
       setLoading(false)
     }
-  }, [currentView, currentFolderId, searchQuery, sortField, sortOrder])
+  }, [currentFolderId, searchQuery, sortField, sortOrder])
 
   useEffect(() => {
     fetchFiles()
   }, [fetchFiles])
 
   function handleFolderSelect(folderId: string) {
-    setCurrentView("root")
     setCurrentFolderId(folderId)
     setSearchQuery("")
   }
 
-  function handleViewChange(view: ViewType) {
-    setCurrentView(view)
+  function handleNavigateRoot() {
+    setCurrentFolderId(null)
+    setBreadcrumbs([])
     setSearchQuery("")
-    if (view !== "root") {
-      setCurrentFolderId(null)
-      setBreadcrumbs([])
-    } else {
-      setCurrentFolderId("root")
-      setBreadcrumbs([])
-    }
   }
 
   function handleOpenFile(file: DriveFile) {
     if (file.fileType === "folder") {
       setBreadcrumbs((prev) => {
-        if (currentFolderId && currentFolderId !== "root") {
+        if (currentFolderId) {
           return [...prev, { id: currentFolderId, name: files.find((f) => f.id === currentFolderId)?.name ?? "Folder" }]
         }
         return prev
@@ -128,18 +98,14 @@ export function WorkspaceExplorer() {
   function handleBreadcrumbNavigate(folderId: string) {
     setCurrentFolderId(folderId)
     const idx = breadcrumbs.findIndex((b) => b.id === folderId)
-    if (idx >= 0) {
-      setBreadcrumbs(breadcrumbs.slice(0, idx))
-    } else {
-      setBreadcrumbs([])
-    }
+    setBreadcrumbs(idx >= 0 ? breadcrumbs.slice(0, idx) : [])
   }
 
-  async function handleUpload(files: FileList | null) {
-    if (!files?.length) return
+  async function handleUpload(filesList: FileList | null) {
+    if (!filesList?.length) return
 
     const formData = new FormData()
-    formData.append("file", files[0])
+    formData.append("file", filesList[0])
     if (currentFolderId) formData.append("parentId", currentFolderId)
 
     const result = await uploadFile(formData)
@@ -148,29 +114,6 @@ export function WorkspaceExplorer() {
     } else {
       fetchFiles()
     }
-  }
-
-  async function handleTrash(file: DriveFile) {
-    await trashFile(file.id)
-    fetchFiles()
-  }
-
-  async function handleRestore(file: DriveFile) {
-    await restoreFile(file.id)
-    fetchFiles()
-  }
-
-  async function handleStar(file: DriveFile) {
-    await starFile(file.id, !file.starred)
-    fetchFiles()
-  }
-
-  async function handleRename(file: DriveFile, newName: string) {
-    if (newName && newName !== file.name) {
-      await renameFile(file.id, newName)
-      fetchFiles()
-    }
-    setRenamingFile(null)
   }
 
   function handleSortChange(field: DriveSortField, order: DriveSortOrder) {
@@ -183,13 +126,12 @@ export function WorkspaceExplorer() {
       <DriveSidebar
         currentFolderId={currentFolderId}
         onFolderSelect={handleFolderSelect}
-        onViewChange={handleViewChange}
-        currentView={currentView}
+        onNavigateRoot={handleNavigateRoot}
       />
 
       <div className="flex flex-1 flex-col gap-3 overflow-auto p-4">
         <DriveBreadcrumbs
-          items={currentFolderId && currentFolderId !== "root" ? breadcrumbs : []}
+          items={currentFolderId ? breadcrumbs : []}
           onNavigate={handleBreadcrumbNavigate}
         />
 
@@ -236,16 +178,12 @@ export function WorkspaceExplorer() {
             <div className="text-center">
               <p className="font-medium">This folder is empty</p>
               <p className="text-sm">
-                {currentView === "trash"
-                  ? "No files in trash."
-                  : currentView === "recent"
-                    ? "No recently modified files."
-                    : searchQuery
-                        ? "No files match your search."
-                        : "Upload files or create a folder to get started."}
-            </p>
+                {searchQuery
+                  ? "No files match your search."
+                  : "Upload files or create a folder to get started."}
+              </p>
             </div>
-            {!searchQuery && currentView === "root" && (
+            {!searchQuery && (
               <div className="flex gap-2">
                 <Button type="button" variant="default" size="sm" onClick={() => fileInputRef.current?.click()}>
                   <Upload className="h-4 w-4" />
@@ -262,8 +200,8 @@ export function WorkspaceExplorer() {
                 file={file}
                 onOpen={handleOpenFile}
                 onRename={() => {}}
-                onDelete={currentView === "trash" ? handleRestore : handleTrash}
-                onStar={handleStar}
+                onDelete={(f) => { trashFile(f.id); fetchFiles() }}
+                onStar={() => {}}
               />
             ))}
           </div>
@@ -275,8 +213,8 @@ export function WorkspaceExplorer() {
                 file={file}
                 onOpen={handleOpenFile}
                 onRename={() => {}}
-                onDelete={currentView === "trash" ? handleRestore : handleTrash}
-                onStar={handleStar}
+                onDelete={(f) => { trashFile(f.id); fetchFiles() }}
+                onStar={() => {}}
               />
             ))}
           </div>
@@ -286,7 +224,7 @@ export function WorkspaceExplorer() {
       <NewFolderDialog
         open={newFolderOpen}
         onOpenChange={setNewFolderOpen}
-        parentId={currentFolderId ?? "root"}
+        parentId={currentFolderId ?? undefined}
         onCreated={fetchFiles}
       />
     </div>

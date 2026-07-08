@@ -19,7 +19,7 @@ export async function buildContext(
 
   if (projects && projects.length > 0) {
     sections.push(
-      `Projects: ${projects.map((p) => `${p.name} (${p.status})`).join(", ")}`
+      `Active projects: ${projects.map((p) => `${p.name} (${p.status})`).join(", ")}`
     )
   }
 
@@ -56,8 +56,19 @@ export async function buildContext(
     )
   }
 
-  if (sections.length === 0) {
-    sections.push("No workspace data available.")
+  // Load saved memories
+  const { data: memories } = await supabase
+    .from("ai_memories")
+    .select("type, entity, key, value")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
+    .limit(50)
+
+  if (memories && memories.length > 0) {
+    const memoryLines = memories.map(
+      (m) => `- [${m.type}] ${m.entity}: ${m.key} = ${m.value}`
+    )
+    sections.push(`Saved memories:\n${memoryLines.join("\n")}`)
   }
 
   return sections.join("\n\n")

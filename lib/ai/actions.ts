@@ -4,94 +4,58 @@ import { createClient } from "@/lib/supabase/server"
 import { getOpenRouterConfig, OPENROUTER_BASE_URL } from "@/lib/ai/config"
 import { buildContext } from "@/lib/ai/context"
 import { AI_TOOLS, executeTool } from "@/lib/ai/tools"
+import { getMessages, saveMessage, saveMemory } from "@/lib/ai/memory"
 import type { AIMessage, AIToolCall, AIStreamChunk, OpenRouterRequest } from "@/lib/ai/types"
 
-const SYSTEM_PROMPT = `You are Aspen AI, an autonomous workplace agent for Aspen OS. You proactively investigate, analyze, and summarize information to help users manage their work.
+const SYSTEM_PROMPT = `You are Aspen AI, an autonomous workplace agent for Aspen OS.
+
+## Identity
+You have persistent memory. You remember past conversations and important facts users tell you. Use this memory to provide consistent, informed assistance.
 
 ## Core Behavior
-- You are an AGENT, not a chatbot. Do not just answer questions — investigate, explore, and provide insights.
-- Before responding, explore available data using your tools. If you don't find what you need, try a different approach.
-- If a search fails, inspect the broader context (workspace root, similar names) before reporting failure.
+- You are an AGENT, not a chatbot. Investigate, explore, and provide insights.
+- Before responding, explore available data using your tools.
+- If a search fails, inspect the broader context before reporting failure.
 - Always perform investigation before responding. Use multiple tools if needed.
 
-## Capabilities
-You can search tasks, projects, people, and files in the Aspen Training Centre Workspace.
-You can explore folders, analyze workspace structure, search for documents, and summarize findings.
-File access is restricted to the Aspen Training Centre Workspace folder only — you cannot access personal files or folders outside the workspace.
+## Memory
+- When a user says "remember that..." or "note that...", save the information using the save_memory tool.
+- When the user asks about something you might have been told before, recall it from memory.
+- Memory types: fact, deadline, preference, note
 
 ## Response Formatting
-Always structure responses professionally.
-
-### Tables
-Use Markdown tables when showing 2+ records with the same fields (tasks, projects, files).
-
-### Lists
-Use bullet points for short lists (1-3 items).
-Use numbered lists only for ranked or sequential items.
-
-### Sections
-Use ### headings to group different sections.
-Use bold for emphasis on key values.
-
-### Indicators
-✅ Completed / done
-⏳ In progress / pending
-⚠️ Overdue / urgent
-❌ Not started / backlog
+Always structure responses professionally. Use Markdown tables for records, bullet points for short lists, and headings for sections.
 
 ## Workflows
 
-### Exploring a Folder
-When a user asks "what files are in [folder]" or "explore [folder]":
-1. Use **explore_drive_folder** to search and list contents recursively.
-2. If not found exactly, inspect the workspace root for similar folders.
-3. List files, subfolders, sizes, and dates.
-4. Summarize what the folder contains.
+### Remembering Information
+When a user says "remember that X is Y":
+1. Use the **save_memory** tool to store it.
+2. Confirm to the user that you've saved it.
+3. You'll automatically receive saved memories in your context for future conversations.
 
-### Analyzing the Workspace
-When a user asks to analyze or summarize the workspace:
-1. Use **analyze_workspace** to scan the entire workspace.
-2. Present folder structure, file types, and key statistics.
+### Exploring a Folder
+1. Use **explore_drive_folder** to search and list contents.
+2. If not found exactly, inspect workspace root for similar folders.
 
 ### Searching Documents
-When a user asks to find or summarize a document:
-1. Use **summarize_documents** to search by name or keyword.
-2. List found documents with metadata and links.
-3. Use **read_document** with the file ID to download and read the actual content.
-4. Summarize what the document actually says, not just metadata.
-
-### Reading a Document
-When a user asks "summarize this document" or "what does this say":
-1. First use **summarize_documents** or **search_drive** to find the file.
-2. Then use **read_document** with the file's ID and name to get its content.
-3. For TXT and Markdown files: full text will be returned.
-4. For Google Docs: content will be exported as text.
-5. For PDFs: metadata will be returned (open in Drive to view full content).
-6. After reading, provide a summary of what the document contains.
+1. Use **summarize_documents** to search by name.
+2. Use **read_document** with the file ID to read actual content.
+3. Summarize what the document actually says.
 
 ### General Problem Solving
-1. First, understand the user's intent — files, tasks, or general information.
-2. Execute the appropriate tools.
-3. If a tool returns no results, try similar searches or inspect the workspace root.
-4. NEVER report "not found" without exploring alternatives first.
-5. Combine results from multiple tools to build a complete picture.
-6. Provide insights and recommendations based on what you found.
+1. Understand the user's intent.
+2. Execute appropriate tools.
+3. If no results, try alternative approaches.
+4. Combine results from multiple tools.
+5. Provide insights and recommendations.
 
 ## Safety Rules
-- **Never delete, move, or modify files without asking the user for explicit confirmation first.**
-- When a user asks to delete something, explain what will happen and confirm before proceeding.
-- When a user asks to move something, confirm the destination before proceeding.
-- You can search, analyze, and summarize freely without confirmation.
-
-## Guidelines
-- Use tools to retrieve real data. Do not make up information.
-- When showing tasks, include their status, project, and due date when available.
-- When asked "What should I work on today?", check assigned tasks.
-- When asked "Where is X?", search workspace files and tasks.
-- Keep responses concise, structured, and actionable.`
+- Never delete, move, or modify files without asking for confirmation.
+- You can search, analyze, and summarize freely without confirmation.`
 
 export async function processAIRequest(
-  request: { message: string; workspaceId: string; workspaceSlug: string }
+  request: { message: string; workspaceId: string; workspaceSlug: string; conversationId?: string }
 ): Promise<AIStreamChunk[]> {
   const supabase = await createClient()
   const { data: { session } } = await supabase.auth.getSession()
@@ -103,13 +67,44 @@ export async function processAIRequest(
     const { apiKey, model } = getOpenRouterConfig()
     const context = await buildContext(request.workspaceId, user.id)
 
+    let conversationId = request.conversationId
+
+    if (!conversationId) {
+      const { listConversations, createConversation } = await import("@/lib/ai/memory")
+      const existing = await listConversations(request.workspaceId)
+      conversationId = existing[0]?.id ?? (await createConversation(request.workspaceId, request.message.slice(0, 60))).id
+    }
+
+    const previousMessages = await getMessages(conversationId)
+
     const messages: { role: string; content: string }[] = [
       { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: `Current workspace context:\n${context}\n\nUser request: ${request.message}` },
+      { role: "system", content: `Current workspace context:\n${context}` },
     ]
+
+    for (const msg of previousMessages.slice(-10)) {
+      messages.push({ role: msg.role, content: msg.content })
+    }
+
+    messages.push({ role: "user", content: request.message })
+
+    await saveMessage(conversationId, "user", request.message)
 
     const chunks: AIStreamChunk[] = []
     let maxToolCalls = 5
+
+    // Auto-detect memory save intent
+    const rememberMatch = request.message.match(/remember\s+(?:that\s+)?(.+?)(?:\s+is\s+|\s+will\s+be\s+|\s*:\s*)(.+)/i)
+    if (rememberMatch) {
+      const entity = rememberMatch[1].trim()
+      const value = rememberMatch[2].trim()
+      const key = entity.toLowerCase().replace(/\s+/g, "_").slice(0, 60)
+
+      await saveMemory(request.workspaceId, "fact", entity, key, value)
+      chunks.push({ type: "text", content: `I've saved that: **${entity}** → **${value}**` })
+      chunks.push({ type: "done" })
+      return chunks
+    }
 
     while (maxToolCalls > 0) {
       maxToolCalls--
@@ -150,23 +145,42 @@ export async function processAIRequest(
       const toolCalls: AIToolCall[] = responseMessage.tool_calls ?? []
 
       if (toolCalls.length === 0) {
-        chunks.push({ type: "done" })
+        if (content) {
+          await saveMessage(conversationId, "assistant", content)
+        }
+        chunks.push({ type: "done", conversationId })
         return chunks
       }
 
       for (const toolCall of toolCalls) {
-        chunks.push({ type: "tool_call", tool_call: toolCall })
+        chunks.push({ type: "tool_call", tool_call: toolCall, conversationId })
 
         const { name, arguments: rawArgs } = toolCall.function
         let args: Record<string, unknown> = {}
-        try {
-          args = JSON.parse(rawArgs)
-        } catch {
-          args = {}
+        try { args = JSON.parse(rawArgs) } catch { args = {} }
+
+        if (name === "save_memory") {
+          const { saveMemory: saveMem } = await import("@/lib/ai/memory")
+          await saveMem(
+            request.workspaceId,
+            (args.type as string) ?? "fact",
+            (args.entity as string) ?? "",
+            (args.key as string) ?? "",
+            (args.value as string) ?? ""
+          )
+          const memResult = `Saved memory: ${args.entity}: ${args.key} = ${args.value}`
+          chunks.push({ type: "tool_result", tool_result: { name, result: memResult }, conversationId })
+          messages.push({
+            role: "assistant",
+            content: content ?? null,
+            tool_calls: [toolCall],
+          } as unknown as { role: string; content: string })
+          messages.push({ role: "tool", content: memResult, tool_call_id: toolCall.id } as unknown as { role: string; content: string })
+          continue
         }
 
         const result = await executeTool(name, args, request.workspaceId, user.id)
-        chunks.push({ type: "tool_result", tool_result: { name, result } })
+        chunks.push({ type: "tool_result", tool_result: { name, result }, conversationId })
 
         messages.push({
           role: "assistant",
@@ -182,7 +196,7 @@ export async function processAIRequest(
       }
     }
 
-    chunks.push({ type: "done" })
+    chunks.push({ type: "done", conversationId })
     return chunks
   } catch (err) {
     return [{
@@ -193,6 +207,5 @@ export async function processAIRequest(
 }
 
 export async function getAspenAIModels(): Promise<string[]> {
-  const models = ["deepseek/deepseek-chat", "qwen/qwen2.5-72b-instruct", "kimi/kimi-vl-2025"]
-  return models
+  return ["deepseek/deepseek-chat", "qwen/qwen2.5-72b-instruct", "kimi/kimi-vl-2025"]
 }

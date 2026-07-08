@@ -37,6 +37,7 @@ export type AIStreamChunk = {
     name: string
     result: string
   }
+  conversationId?: string
 }
 
 export type OpenRouterRequest = {

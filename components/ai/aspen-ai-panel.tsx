@@ -72,9 +72,12 @@ export function AspenAIPanel({
 
       let assistantContent = ""
       let toolCalls: { name: string; result: string }[] = []
+      let errorContent = ""
 
       for (const chunk of chunks) {
-        if (chunk.type === "text" && chunk.content) {
+        if (chunk.type === "error" && chunk.content) {
+          errorContent += chunk.content
+        } else if (chunk.type === "text" && chunk.content) {
           assistantContent += chunk.content
         } else if (chunk.type === "tool_result" && chunk.tool_result) {
           toolCalls.push({
@@ -84,21 +87,46 @@ export function AspenAIPanel({
         }
       }
 
-      const assistantMessage: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: assistantContent || "I processed your request.",
-        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      if (errorContent) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: errorContent,
+          },
+        ])
+      } else if (assistantContent) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: assistantContent,
+            toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+          },
+        ])
+      } else {
+        const toolSummary = toolCalls
+          .map((tc) => `**${tc.name.replace(/_/g, " ")}**: ${tc.result}`)
+          .join("\n\n")
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: toolSummary || "No response returned.",
+            toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+          },
+        ])
       }
-
-      setMessages((prev) => [...prev, assistantMessage])
-    } catch {
+    } catch (err) {
       setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: "Sorry, I encountered an error processing your request.",
+          content: err instanceof Error ? err.message : "An unexpected error occurred.",
         },
       ])
     } finally {

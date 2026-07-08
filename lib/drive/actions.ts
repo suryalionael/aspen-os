@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getValidAccessToken } from "@/lib/google/client"
-import { getDriveRootFolderId, buildScopedQuery } from "@/lib/drive/config"
+import { tryGetDriveRootFolderId } from "@/lib/drive/config"
 import type {
   DriveFile,
   DriveFileListResponse,
@@ -82,13 +82,20 @@ function parseFile(item: Record<string, unknown>): DriveFile {
 }
 
 function rootFolderId(): string {
-  return getDriveRootFolderId()
+  const id = tryGetDriveRootFolderId()
+  if (!id) {
+    throw new Error(
+      "Google Drive workspace folder is not configured. Contact your administrator to set ASPEN_GOOGLE_DRIVE_ROOT_FOLDER_ID."
+    )
+  }
+  return id
 }
 
 async function assertFileInWorkspace(fileId: string): Promise<DriveFile> {
+  const rootId = rootFolderId()
   const file = await getFile(fileId)
 
-  if (file.id === rootFolderId()) return file
+  if (file.id === rootId) return file
 
   const isDescendant = await isFileInWorkspaceTree(fileId)
   if (!isDescendant) {
@@ -100,6 +107,7 @@ async function assertFileInWorkspace(fileId: string): Promise<DriveFile> {
 
 async function isFileInWorkspaceTree(fileId: string): Promise<boolean> {
   try {
+    const rootId = rootFolderId()
     const userId = await getUserId()
     const token = await getValidAccessToken(userId)
     if (!token) return false
@@ -112,7 +120,7 @@ async function isFileInWorkspaceTree(fileId: string): Promise<boolean> {
     if (!response.ok) return false
     const file: { id: string; parents?: string[] } = await response.json()
 
-    if (file.parents?.includes(rootFolderId())) return true
+    if (file.parents?.includes(rootId)) return true
 
     if (file.parents && file.parents.length > 0) {
       for (const parentId of file.parents) {

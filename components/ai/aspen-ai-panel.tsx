@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { Bot, Send, X, Loader2, Search, Sparkles } from "lucide-react"
 
 import { processAIRequest } from "@/lib/ai/actions"
@@ -178,6 +179,7 @@ export function AspenAIPanel({
               ) : (
                 <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none leading-relaxed">
                   <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
                     components={{
                       table({ children }) {
                         return (

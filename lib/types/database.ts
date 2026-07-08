@@ -343,6 +343,44 @@ export type Database = {
           },
         ]
       }
+      project_drive_connections: {
+        Row: {
+          connected_by: string
+          created_at: string
+          google_drive_folder_id: string
+          google_drive_folder_name: string | null
+          id: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          connected_by: string
+          created_at?: string
+          google_drive_folder_id: string
+          google_drive_folder_name?: string | null
+          id?: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          connected_by?: string
+          created_at?: string
+          google_drive_folder_id?: string
+          google_drive_folder_name?: string | null
+          id?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_drive_connections_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_favorites: {
         Row: {
           created_at: string

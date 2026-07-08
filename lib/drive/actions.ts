@@ -46,8 +46,19 @@ async function driveFetch<T>(
   })
 
   if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`Drive API error: ${error}`)
+    const errorBody = await response.text()
+    let parsed: { error?: { message?: string; status?: string } } = {}
+    try { parsed = JSON.parse(errorBody) } catch {}
+
+    if (parsed.error?.status === "PERMISSION_DENIED" && parsed.error?.message?.includes("Drive API has not been used")) {
+      const projectMatch = parsed.error.message.match(/project\s+(\d+)/)
+      const projectId = projectMatch ? projectMatch[1] : "your-project"
+      throw new Error(
+        `Google Drive API is not enabled. Go to https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=${projectId} and enable the Google Drive API, then try again.`
+      )
+    }
+
+    throw new Error(`Drive API error: ${parsed.error?.message ?? errorBody}`)
   }
 
   return response.json()

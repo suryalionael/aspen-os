@@ -7,7 +7,6 @@ import type { DriveFile, DriveViewMode, DriveSortField, DriveSortOrder } from "@
 import {
   listFiles,
   searchFiles,
-  trashFile,
   uploadFile,
 } from "@/lib/drive/actions"
 import { DriveBreadcrumbs } from "@/components/workspace/drive-breadcrumbs"
@@ -15,7 +14,12 @@ import { DriveToolbar } from "@/components/workspace/drive-toolbar"
 import { DriveSidebar } from "@/components/workspace/drive-sidebar"
 import { DriveGridItem, DriveListItem } from "@/components/workspace/drive-file-item"
 import { NewFolderDialog } from "@/components/workspace/drive-new-folder-dialog"
+import { RenameDialog } from "@/components/workspace/drive-rename-dialog"
+import { MoveDialog } from "@/components/workspace/drive-move-dialog"
+import { DeleteDialog } from "@/components/workspace/drive-delete-dialog"
 import { Button } from "@/components/ui/button"
+import { ToastStack } from "@/components/ui/toast-stack"
+import { useToasts } from "@/lib/hooks/use-toasts"
 
 type Breadcrumb = { id: string; name: string }
 
@@ -30,7 +34,14 @@ export function WorkspaceExplorer() {
   const [sortOrder, setSortOrder] = useState<DriveSortOrder>("asc")
   const [searchQuery, setSearchQuery] = useState("")
   const [newFolderOpen, setNewFolderOpen] = useState(false)
+
+  const [targetFile, setTargetFile] = useState<DriveFile | null>(null)
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [moveOpen, setMoveOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { toasts, pushToast } = useToasts()
 
   const fetchFiles = useCallback(async () => {
     setLoading(true)
@@ -88,10 +99,8 @@ export function WorkspaceExplorer() {
         return prev
       })
       setCurrentFolderId(file.id)
-    } else {
-      if (file.webViewLink) {
-        window.open(file.webViewLink, "_blank")
-      }
+    } else if (file.webViewLink) {
+      window.open(file.webViewLink, "_blank")
     }
   }
 
@@ -112,6 +121,7 @@ export function WorkspaceExplorer() {
     if ("error" in result) {
       setError(result.error)
     } else {
+      pushToast("File uploaded")
       fetchFiles()
     }
   }
@@ -119,6 +129,32 @@ export function WorkspaceExplorer() {
   function handleSortChange(field: DriveSortField, order: DriveSortOrder) {
     setSortField(field)
     setSortOrder(order)
+  }
+
+  function handleDownload(file: DriveFile) {
+    if (file.webViewLink) {
+      window.open(file.webViewLink, "_blank")
+    }
+  }
+
+  function handleRenameClick(file: DriveFile) {
+    setTargetFile(file)
+    setRenameOpen(true)
+  }
+
+  function handleMoveClick(file: DriveFile) {
+    setTargetFile(file)
+    setMoveOpen(true)
+  }
+
+  function handleDeleteClick(file: DriveFile) {
+    setTargetFile(file)
+    setDeleteOpen(true)
+  }
+
+  function handleActionComplete(action: string) {
+    pushToast(action)
+    fetchFiles()
   }
 
   return (
@@ -199,9 +235,10 @@ export function WorkspaceExplorer() {
                 key={file.id}
                 file={file}
                 onOpen={handleOpenFile}
-                onRename={() => {}}
-                onDelete={(f) => { trashFile(f.id); fetchFiles() }}
-                onStar={() => {}}
+                onRename={handleRenameClick}
+                onDelete={handleDeleteClick}
+                onMove={handleMoveClick}
+                onDownload={handleDownload}
               />
             ))}
           </div>
@@ -212,21 +249,51 @@ export function WorkspaceExplorer() {
                 key={file.id}
                 file={file}
                 onOpen={handleOpenFile}
-                onRename={() => {}}
-                onDelete={(f) => { trashFile(f.id); fetchFiles() }}
-                onStar={() => {}}
+                onRename={handleRenameClick}
+                onDelete={handleDeleteClick}
+                onMove={handleMoveClick}
+                onDownload={handleDownload}
               />
             ))}
           </div>
         )}
       </div>
 
+      {targetFile && (
+        <>
+          <RenameDialog
+            open={renameOpen}
+            onOpenChange={setRenameOpen}
+            fileId={targetFile.id}
+            currentName={targetFile.name}
+            onRenamed={() => handleActionComplete("File renamed")}
+          />
+          <MoveDialog
+            open={moveOpen}
+            onOpenChange={setMoveOpen}
+            fileId={targetFile.id}
+            fileName={targetFile.name}
+            currentFolderId={currentFolderId}
+            onMoved={() => handleActionComplete("File moved")}
+          />
+          <DeleteDialog
+            open={deleteOpen}
+            onOpenChange={setDeleteOpen}
+            fileId={targetFile.id}
+            fileName={targetFile.name}
+            onDeleted={() => handleActionComplete("File moved to trash")}
+          />
+        </>
+      )}
+
       <NewFolderDialog
         open={newFolderOpen}
         onOpenChange={setNewFolderOpen}
         parentId={currentFolderId ?? undefined}
-        onCreated={fetchFiles}
+        onCreated={() => handleActionComplete("Folder created")}
       />
+
+      <ToastStack toasts={toasts} />
     </div>
   )
 }

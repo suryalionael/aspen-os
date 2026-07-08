@@ -14,6 +14,7 @@ import {
   ExternalLink,
   Pencil,
   Download,
+  Move,
 } from "lucide-react"
 import type { DriveFile } from "@/lib/drive/types"
 import { Button } from "@/components/ui/button"
@@ -55,13 +56,15 @@ export function DriveGridItem({
   onOpen,
   onRename,
   onDelete,
-  onStar,
+  onMove,
+  onDownload,
 }: {
   file: DriveFile
   onOpen: (file: DriveFile) => void
   onRename: (file: DriveFile) => void
   onDelete: (file: DriveFile) => void
-  onStar: (file: DriveFile) => void
+  onMove: (file: DriveFile) => void
+  onDownload: (file: DriveFile) => void
 }) {
   const [hovering, setHovering] = useState(false)
 
@@ -88,8 +91,22 @@ export function DriveGridItem({
       <span className="line-clamp-2 max-w-[120px] text-xs text-muted-foreground">
         {file.name}
       </span>
-      {hovering && file.fileType !== "folder" && (
+      {hovering && (
         <div className="absolute right-1 top-1 flex gap-0.5">
+          {file.fileType !== "folder" && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon"
+              className="h-6 w-6"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDownload(file)
+              }}
+            >
+              <Download className="h-3 w-3" />
+            </Button>
+          )}
           <Button
             type="button"
             variant="secondary"
@@ -97,10 +114,34 @@ export function DriveGridItem({
             className="h-6 w-6"
             onClick={(e) => {
               e.stopPropagation()
-              onStar(file)
+              onRename(file)
             }}
           >
-            <Star className={`h-3 w-3 ${file.starred ? "fill-yellow-400 text-yellow-400" : ""}`} />
+            <Pencil className="h-3 w-3" />
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon"
+            className="h-6 w-6"
+            onClick={(e) => {
+              e.stopPropagation()
+              onMove(file)
+            }}
+          >
+            <Move className="h-3 w-3" />
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon"
+            className="h-6 w-6"
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete(file)
+            }}
+          >
+            <Trash2 className="h-3 w-3 text-destructive" />
           </Button>
         </div>
       )}
@@ -113,17 +154,19 @@ export function DriveListItem({
   onOpen,
   onRename,
   onDelete,
-  onStar,
+  onMove,
+  onDownload,
 }: {
   file: DriveFile
   onOpen: (file: DriveFile) => void
   onRename: (file: DriveFile) => void
   onDelete: (file: DriveFile) => void
-  onStar: (file: DriveFile) => void
+  onMove: (file: DriveFile) => void
+  onDownload: (file: DriveFile) => void
 }) {
   return (
     <div className="flex items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-secondary/30">
-      <button type="button" onClick={() => onOpen(file)} className="flex flex-1 items-center gap-3 min-w-0">
+      <button type="button" onClick={() => onOpen(file)} className="flex min-w-0 flex-1 items-center gap-3">
         <div className="flex-shrink-0">
           {typeIcons[file.fileType] ?? <File className="h-4 w-4" />}
         </div>
@@ -136,14 +179,43 @@ export function DriveListItem({
         {formatDate(file.modifiedTime)}
       </span>
       <div className="flex items-center gap-0.5">
+        {file.fileType !== "folder" && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => onDownload(file)}
+          >
+            <Download className="h-3.5 w-3.5" />
+          </Button>
+        )}
         <Button
           type="button"
           variant="ghost"
           size="icon"
           className="h-7 w-7"
-          onClick={() => onStar(file)}
+          onClick={() => onRename(file)}
         >
-          <Star className={`h-3.5 w-3.5 ${file.starred ? "fill-yellow-400 text-yellow-400" : ""}`} />
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={() => onMove(file)}
+        >
+          <Move className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={() => onDelete(file)}
+        >
+          <Trash2 className="h-3.5 w-3.5 text-destructive" />
         </Button>
         {file.fileType !== "folder" && (
           <Button

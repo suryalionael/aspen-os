@@ -149,6 +149,14 @@ export function ProjectSidebar({
             Notes
           </Link>
           <Link
+            href={`/${workspaceSlug}/workspace`}
+            prefetch={false}
+            onClick={closeDrawer}
+            className={navLinkClass(`/${workspaceSlug}/workspace`)}
+          >
+            Workspace
+          </Link>
+          <Link
             href={`/${workspaceSlug}/activity`}
             prefetch={false}
             onClick={closeDrawer}

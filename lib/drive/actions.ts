@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getValidAccessToken } from "@/lib/google/client"
+import { getDriveRootFolderId, buildScopedQuery } from "@/lib/drive/config"
 import type {
   DriveFile,
   DriveFileListResponse,
@@ -25,13 +26,6 @@ async function getUserId(): Promise<string> {
   const { data } = await supabase.auth.getSession()
   if (!data.session?.user) throw new Error("Not authenticated")
   return data.session.user.id
-}
-
-async function getHeaders(): Promise<HeadersInit> {
-  const userId = await getUserId()
-  const token = await getValidAccessToken(userId)
-  if (!token) throw new Error("Google account not connected")
-  return { Authorization: `Bearer ${token}` }
 }
 
 async function driveFetch<T>(
@@ -87,17 +81,60 @@ function parseFile(item: Record<string, unknown>): DriveFile {
   }
 }
 
+function rootFolderId(): string {
+  return getDriveRootFolderId()
+}
+
+async function assertFileInWorkspace(fileId: string): Promise<DriveFile> {
+  const file = await getFile(fileId)
+
+  if (file.id === rootFolderId()) return file
+
+  const isDescendant = await isFileInWorkspaceTree(fileId)
+  if (!isDescendant) {
+    throw new Error("File is outside the Aspen Workspace folder and cannot be accessed.")
+  }
+
+  return file
+}
+
+async function isFileInWorkspaceTree(fileId: string): Promise<boolean> {
+  try {
+    const userId = await getUserId()
+    const token = await getValidAccessToken(userId)
+    if (!token) return false
+
+    const response = await fetch(
+      `${DRIVE_API}/files/${fileId}?fields=parents,id`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+
+    if (!response.ok) return false
+    const file: { id: string; parents?: string[] } = await response.json()
+
+    if (file.parents?.includes(rootFolderId())) return true
+
+    if (file.parents && file.parents.length > 0) {
+      for (const parentId of file.parents) {
+        if (await isFileInWorkspaceTree(parentId)) return true
+      }
+    }
+
+    return false
+  } catch {
+    return false
+  }
+}
+
 export async function listFiles(
   folderId?: string,
   options?: DriveSearchOptions
 ): Promise<DriveFileListResponse> {
+  const rootId = rootFolderId()
   const params = new URLSearchParams()
 
-  let query = "trashed = false"
-  if (folderId && folderId !== "root") {
-    query += ` and '${folderId}' in parents`
-  }
-
+  const folder = folderId ?? rootId
+  const query = `trashed = false and '${folder}' in parents`
   params.set("q", query)
   params.set("pageSize", String(options?.pageSize ?? 50))
   params.set("fields", FIELDS)
@@ -118,8 +155,10 @@ export async function searchFiles(
   query: string,
   options?: { pageSize?: number; pageToken?: string }
 ): Promise<DriveFileListResponse> {
+  const rootId = rootFolderId()
   const params = new URLSearchParams()
-  params.set("q", `trashed = false and name contains '${query.replace(/'/g, "\\'")}'`)
+  const safeQuery = query.replace(/'/g, "\\'")
+  params.set("q", `trashed = false and '${rootId}' in parents and name contains '${safeQuery}'`)
   params.set("pageSize", String(options?.pageSize ?? 50))
   params.set("fields", FIELDS)
   if (options?.pageToken) params.set("pageToken", options.pageToken)
@@ -144,8 +183,9 @@ export async function createFolder(
   name: string,
   parentId?: string
 ): Promise<DriveFile> {
+  const rootId = rootFolderId()
   const body: Record<string, unknown> = { name, mimeType: MIME_TYPE_FOLDER }
-  if (parentId && parentId !== "root") body.parents = [parentId]
+  body.parents = [parentId && parentId !== "root" ? parentId : rootId]
 
   const data = await driveFetch<Record<string, unknown>>(`/files?fields=${FIELDS}`, {
     method: "POST",
@@ -156,6 +196,7 @@ export async function createFolder(
 }
 
 export async function renameFile(fileId: string, newName: string): Promise<DriveFile> {
+  await assertFileInWorkspace(fileId)
   const data = await driveFetch<Record<string, unknown>>(`/files/${fileId}?fields=${FIELDS}`, {
     method: "PATCH",
     body: JSON.stringify({ name: newName }),
@@ -164,6 +205,16 @@ export async function renameFile(fileId: string, newName: string): Promise<Drive
 }
 
 export async function moveFile(fileId: string, newParentId: string): Promise<DriveFile> {
+  const rootId = rootFolderId()
+
+  if (newParentId !== rootId) {
+    const isTargetInWorkspace = await isFileInWorkspaceTree(newParentId)
+    if (!isTargetInWorkspace) {
+      throw new Error("Cannot move files outside the Aspen Workspace folder.")
+    }
+  }
+
+  await assertFileInWorkspace(fileId)
   const file = await getFile(fileId)
   const prev = file.parents.join(",")
 
@@ -175,10 +226,12 @@ export async function moveFile(fileId: string, newParentId: string): Promise<Dri
 }
 
 export async function deleteFile(fileId: string): Promise<void> {
+  await assertFileInWorkspace(fileId)
   await driveFetch(`/files/${fileId}`, { method: "DELETE" })
 }
 
 export async function trashFile(fileId: string): Promise<DriveFile> {
+  await assertFileInWorkspace(fileId)
   const data = await driveFetch<Record<string, unknown>>(`/files/${fileId}?fields=${FIELDS}`, {
     method: "PATCH",
     body: JSON.stringify({ trashed: true }),
@@ -187,6 +240,7 @@ export async function trashFile(fileId: string): Promise<DriveFile> {
 }
 
 export async function restoreFile(fileId: string): Promise<DriveFile> {
+  await assertFileInWorkspace(fileId)
   const data = await driveFetch<Record<string, unknown>>(`/files/${fileId}?fields=${FIELDS}`, {
     method: "PATCH",
     body: JSON.stringify({ trashed: false }),
@@ -195,8 +249,9 @@ export async function restoreFile(fileId: string): Promise<DriveFile> {
 }
 
 export async function listRecentFiles(pageSize = 20): Promise<DriveFileListResponse> {
+  const rootId = rootFolderId()
   const params = new URLSearchParams({
-    q: "trashed = false",
+    q: `trashed = false and '${rootId}' in parents`,
     pageSize: String(pageSize),
     fields: FIELDS,
     orderBy: "modifiedTime desc",
@@ -213,8 +268,9 @@ export async function listRecentFiles(pageSize = 20): Promise<DriveFileListRespo
 }
 
 export async function listTrashedFiles(pageSize = 50): Promise<DriveFileListResponse> {
+  const rootId = rootFolderId()
   const params = new URLSearchParams({
-    q: "trashed = true",
+    q: `trashed = true and '${rootId}' in parents`,
     pageSize: String(pageSize),
     fields: FIELDS,
   })
@@ -234,7 +290,8 @@ export async function getFolderTree(): Promise<DriveFolderTree[]> {
   const token = await getValidAccessToken(userId)
   if (!token) return []
 
-  return buildFolderTree("root", token)
+  const rootId = rootFolderId()
+  return buildFolderTree(rootId, token)
 }
 
 async function buildFolderTree(parentId: string, token: string): Promise<DriveFolderTree[]> {
@@ -262,14 +319,14 @@ async function buildFolderTree(parentId: string, token: string): Promise<DriveFo
 }
 
 export async function getGoogleDriveFileListSnapshot(
-  folderId = "root",
+  folderId?: string,
   pageSize = 100
 ): Promise<DriveFileListResponse> {
   return listFiles(folderId, { pageSize })
 }
 
 export async function getFileDownloadUrl(fileId: string): Promise<string | null> {
-  const file = await getFile(fileId)
+  const file = await assertFileInWorkspace(fileId)
   if (file.mimeType === MIME_TYPE_FOLDER) return null
 
   const exportMap: Record<string, string> = {
@@ -284,27 +341,11 @@ export async function getFileDownloadUrl(fileId: string): Promise<string | null>
 }
 
 export async function starFile(fileId: string, starred: boolean): Promise<void> {
+  await assertFileInWorkspace(fileId)
   await driveFetch(`/files/${fileId}`, {
     method: "PATCH",
     body: JSON.stringify({ starred }),
   })
-}
-
-export async function listSharedWithMe(pageSize = 50): Promise<DriveFileListResponse> {
-  const params = new URLSearchParams({
-    q: "trashed = false and sharedWithMe = true",
-    pageSize: String(pageSize),
-    fields: FIELDS,
-  })
-
-  const data = await driveFetch<{ files: Record<string, unknown>[]; nextPageToken?: string }>(
-    `/files?${params.toString()}`
-  )
-
-  return {
-    files: data.files.map(parseFile),
-    nextPageToken: data.nextPageToken ?? null,
-  }
 }
 
 export async function uploadFile(
@@ -312,7 +353,7 @@ export async function uploadFile(
 ): Promise<{ error: string } | { success: true; file: DriveFile }> {
   try {
     const file = formData.get("file") as File | null
-    const parentId = (formData.get("parentId") as string) ?? "root"
+    const parentId = (formData.get("parentId") as string) ?? rootFolderId()
 
     if (!file) return { error: "No file provided" }
 
@@ -323,7 +364,16 @@ export async function uploadFile(
     const headers: HeadersInit = { Authorization: `Bearer ${token}` }
 
     const metadata: Record<string, unknown> = { name: file.name }
-    if (parentId && parentId !== "root") metadata.parents = [parentId]
+    if (parentId && parentId !== "root") {
+      const targetId = parentId
+      if (targetId !== rootFolderId()) {
+        const inWorkspace = await isFileInWorkspaceTree(targetId)
+        if (!inWorkspace) {
+          return { error: "Cannot upload outside the Aspen Workspace folder." }
+        }
+      }
+      metadata.parents = [targetId]
+    }
 
     const metadataResponse = await fetch(`${DRIVE_API}/files?fields=${FIELDS}&uploadType=resumable`, {
       method: "POST",

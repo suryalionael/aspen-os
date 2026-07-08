@@ -226,7 +226,8 @@ export function ProjectFilesBrowser({
               onOpen={handleOpenFile}
               onRename={() => {}}
               onDelete={() => {}}
-              onStar={() => {}}
+              onMove={() => {}}
+              onDownload={() => {}}
             />
           ))}
         </div>

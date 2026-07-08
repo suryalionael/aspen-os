@@ -142,6 +142,21 @@ export const AI_TOOLS: AITool[] = [
   {
     type: "function",
     function: {
+      name: "read_document",
+      description: "Download and read the actual content of a document from the workspace. Supports TXT, Markdown (reads full text), Google Docs (exports to text), and PDF (returns metadata). Use this when you need to summarize or understand what a document says.",
+      parameters: {
+        type: "object",
+        properties: {
+          fileId: { type: "string", description: "The Drive file ID of the document to read" },
+          fileName: { type: "string", description: "The file name (used to determine format)" },
+        },
+        required: ["fileId", "fileName"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_overdue_tasks",
       description: "Get all overdue tasks (past due date, not done).",
       parameters: {
@@ -905,6 +920,75 @@ async function summarizeDocuments(
   }
 }
 
+async function readDocument(
+  args: Record<string, unknown>,
+  _workspaceId: string,
+  _userId: string
+): Promise<string> {
+  try {
+    const fileId = (args.fileId as string)?.trim()
+    const fileName = (args.fileName as string)?.trim() ?? "document"
+    if (!fileId) return "Please provide a file ID to read."
+
+    const { getValidAccessToken } = await import("@/lib/google/client")
+    const { getFile } = await import("@/lib/drive/actions")
+    const { createClient } = await import("@/lib/supabase/server")
+    const supabase = await createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) return "Not authenticated"
+
+    const token = await getValidAccessToken(session.user.id)
+    if (!token) return "Google account not connected"
+
+    const file = await getFile(fileId)
+    const lowerName = fileName.toLowerCase()
+    const isGoogleDoc = file.mimeType.includes("google-apps")
+    const isPlainText = lowerName.endsWith(".txt") || lowerName.endsWith(".md") || lowerName.endsWith(".markdown") || file.mimeType === "text/plain"
+    const isPDF = lowerName.endsWith(".pdf") || file.mimeType === "application/pdf"
+
+    if (isGoogleDoc) {
+      const exportResponse = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+
+      if (!exportResponse.ok) {
+        return `Document "${fileName}" is a Google document but could not be exported. Open it in Drive to view: ${file.webViewLink}`
+      }
+
+      const text = await exportResponse.text()
+      const maxLen = 8000
+      const content = text.length > maxLen ? text.slice(0, maxLen) + `\n\n[...truncated at ${maxLen} characters]` : text
+      return `## Content of "${fileName}"\n\n${content}`
+    }
+
+    if (isPlainText) {
+      const downloadResponse = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+
+      if (!downloadResponse.ok) {
+        return `Could not download "${fileName}".`
+      }
+
+      const text = await downloadResponse.text()
+      const maxLen = 8000
+      const content = text.length > maxLen ? text.slice(0, maxLen) + `\n\n[...truncated at ${maxLen} characters]` : text
+      return `## Content of "${fileName}"\n\n${content}`
+    }
+
+    if (isPDF) {
+      const size = file.size ? `${(file.size / 1024).toFixed(0)} KB` : "unknown size"
+      return `## "${fileName}" (PDF, ${size})\n\nThis is a PDF document. To view its contents, open it in Google Drive:\n${file.webViewLink}`
+    }
+
+    return `File "${fileName}" (${file.mimeType}) could not be read as text. Open it in Drive to view:\n${file.webViewLink}`
+  } catch (err) {
+    return err instanceof Error ? `Failed to read document: ${err.message}` : "Failed to read document"
+  }
+}
+
 export const TOOL_HANDLERS: Record<string, ToolHandler> = {
   search_tasks: searchTasks,
   search_projects: searchProjects,
@@ -915,6 +999,7 @@ export const TOOL_HANDLERS: Record<string, ToolHandler> = {
   explore_drive_folder: exploreDriveFolder,
   analyze_workspace: analyzeWorkspace,
   summarize_documents: summarizeDocuments,
+  read_document: readDocument,
   get_overdue_tasks: getOverdueTasks,
   get_task_summary: getTaskSummary,
   get_user_tasks: getUserTasks,

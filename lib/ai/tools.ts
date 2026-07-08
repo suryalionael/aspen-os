@@ -142,6 +142,23 @@ export const AI_TOOLS: AITool[] = [
   {
     type: "function",
     function: {
+      name: "save_memory",
+      description: "Save a fact, deadline, or note to persistent memory. Use this when the user says 'remember that...' or tells you important information to recall later.",
+      parameters: {
+        type: "object",
+        properties: {
+          type: { type: "string", enum: ["fact", "deadline", "preference", "note"], description: "Type of memory" },
+          entity: { type: "string", description: "The subject or entity this memory is about (e.g. 'Delta Festival', 'Marketing Budget')" },
+          key: { type: "string", description: "A short unique key for this memory (e.g. 'sponsor_deadline')" },
+          value: { type: "string", description: "The value to remember (e.g. 'July 20')" },
+        },
+        required: ["type", "entity", "key", "value"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "read_document",
       description: "Download and read the actual content of a document from the workspace. Supports TXT, Markdown (reads full text), Google Docs (exports to text), and PDF (returns metadata). Use this when you need to summarize or understand what a document says.",
       parameters: {

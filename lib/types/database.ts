@@ -552,31 +552,49 @@ export type Database = {
         Row: {
           content_type: string | null
           created_at: string
+          drive_file_id: string | null
+          drive_modified_time: string | null
+          drive_owner_email: string | null
+          drive_owner_name: string | null
+          drive_url: string | null
           file_name: string
           file_path: string
           file_size: number
           id: string
           task_id: string
+          thumbnail: string | null
           uploaded_by: string | null
         }
         Insert: {
           content_type?: string | null
           created_at?: string
+          drive_file_id?: string | null
+          drive_modified_time?: string | null
+          drive_owner_email?: string | null
+          drive_owner_name?: string | null
+          drive_url?: string | null
           file_name: string
           file_path: string
           file_size: number
           id?: string
           task_id: string
+          thumbnail?: string | null
           uploaded_by?: string | null
         }
         Update: {
           content_type?: string | null
           created_at?: string
+          drive_file_id?: string | null
+          drive_modified_time?: string | null
+          drive_owner_email?: string | null
+          drive_owner_name?: string | null
+          drive_url?: string | null
           file_name?: string
           file_path?: string
           file_size?: number
           id?: string
           task_id?: string
+          thumbnail?: string | null
           uploaded_by?: string | null
         }
         Relationships: [

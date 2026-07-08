@@ -719,6 +719,59 @@ export type Database = {
           },
         ]
       }
+      user_google_connections: {
+        Row: {
+          access_token: string
+          created_at: string
+          google_display_name: string | null
+          google_email: string
+          google_photo_url: string | null
+          google_user_id: string
+          id: string
+          refresh_token: string
+          scope: string
+          token_expires_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          created_at?: string
+          google_display_name?: string | null
+          google_email: string
+          google_photo_url?: string | null
+          google_user_id: string
+          id?: string
+          refresh_token: string
+          scope: string
+          token_expires_at: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string
+          google_display_name?: string | null
+          google_email?: string
+          google_photo_url?: string | null
+          google_user_id?: string
+          id?: string
+          refresh_token?: string
+          scope?: string
+          token_expires_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_google_connections_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspaces: {
         Row: {
           archived_at: string | null

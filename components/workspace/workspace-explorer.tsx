@@ -1,13 +1,12 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { FolderOpen, RefreshCw, Upload } from "lucide-react"
 
 import type { DriveFile, DriveViewMode, DriveSortField, DriveSortOrder } from "@/lib/drive/types"
 import {
   listFiles,
   searchFiles,
-  uploadFile,
 } from "@/lib/drive/actions"
 import { DriveBreadcrumbs } from "@/components/workspace/drive-breadcrumbs"
 import { DriveToolbar } from "@/components/workspace/drive-toolbar"
@@ -17,6 +16,7 @@ import { NewFolderDialog } from "@/components/workspace/drive-new-folder-dialog"
 import { RenameDialog } from "@/components/workspace/drive-rename-dialog"
 import { MoveDialog } from "@/components/workspace/drive-move-dialog"
 import { DeleteDialog } from "@/components/workspace/drive-delete-dialog"
+import { UploadDialog } from "@/components/workspace/drive-upload-dialog"
 import { Button } from "@/components/ui/button"
 import { ToastStack } from "@/components/ui/toast-stack"
 import { useToasts } from "@/lib/hooks/use-toasts"
@@ -34,13 +34,12 @@ export function WorkspaceExplorer() {
   const [sortOrder, setSortOrder] = useState<DriveSortOrder>("asc")
   const [searchQuery, setSearchQuery] = useState("")
   const [newFolderOpen, setNewFolderOpen] = useState(false)
+  const [uploadOpen, setUploadOpen] = useState(false)
 
   const [targetFile, setTargetFile] = useState<DriveFile | null>(null)
   const [renameOpen, setRenameOpen] = useState(false)
   const [moveOpen, setMoveOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const { toasts, pushToast } = useToasts()
 
   const fetchFiles = useCallback(async () => {
@@ -110,22 +109,6 @@ export function WorkspaceExplorer() {
     setBreadcrumbs(idx >= 0 ? breadcrumbs.slice(0, idx) : [])
   }
 
-  async function handleUpload(filesList: FileList | null) {
-    if (!filesList?.length) return
-
-    const formData = new FormData()
-    formData.append("file", filesList[0])
-    if (currentFolderId) formData.append("parentId", currentFolderId)
-
-    const result = await uploadFile(formData)
-    if ("error" in result) {
-      setError(result.error)
-    } else {
-      pushToast("File uploaded")
-      fetchFiles()
-    }
-  }
-
   function handleSortChange(field: DriveSortField, order: DriveSortOrder) {
     setSortField(field)
     setSortOrder(order)
@@ -179,16 +162,9 @@ export function WorkspaceExplorer() {
           onSortChange={handleSortChange}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
-          onUpload={() => fileInputRef.current?.click()}
+          onUpload={() => setUploadOpen(true)}
           onNewFolder={() => setNewFolderOpen(true)}
           loading={loading}
-        />
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          onChange={(e) => handleUpload(e.target.files)}
-          className="hidden"
         />
 
         {error && (
@@ -221,7 +197,7 @@ export function WorkspaceExplorer() {
             </div>
             {!searchQuery && (
               <div className="flex gap-2">
-                <Button type="button" variant="default" size="sm" onClick={() => fileInputRef.current?.click()}>
+                <Button type="button" variant="default" size="sm" onClick={() => setUploadOpen(true)}>
                   <Upload className="h-4 w-4" />
                   Upload files
                 </Button>
@@ -285,6 +261,13 @@ export function WorkspaceExplorer() {
           />
         </>
       )}
+
+      <UploadDialog
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
+        currentFolderId={currentFolderId}
+        onUploaded={() => handleActionComplete("File uploaded")}
+      />
 
       <NewFolderDialog
         open={newFolderOpen}

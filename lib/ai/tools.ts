@@ -102,6 +102,46 @@ export const AI_TOOLS: AITool[] = [
   {
     type: "function",
     function: {
+      name: "explore_drive_folder",
+      description: "Find a folder by name within the workspace, list its contents, and recursively traverse subfolders up to 3 levels deep. Returns folder structure, files, metadata, and modified dates.",
+      parameters: {
+        type: "object",
+        properties: {
+          folderName: { type: "string", description: "Name of the folder to explore" },
+        },
+        required: ["folderName"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "analyze_workspace",
+      description: "Analyze the entire Aspen Training Centre Workspace. Returns total files, folder structure, document categories, file type distribution, and recommendations.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "summarize_documents",
+      description: "Search for documents by name within the workspace and return their contents or metadata for summarization. Supports PDF, TXT, Markdown, and Google Docs.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Name or keyword to search for documents" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_overdue_tasks",
       description: "Get all overdue tasks (past due date, not done).",
       parameters: {
@@ -657,6 +697,214 @@ function buildTreeString(name: string, scan: ScanResult, depth: number): string 
   return lines.join("\n")
 }
 
+async function exploreDriveFolder(
+  args: Record<string, unknown>,
+  _workspaceId: string,
+  _userId: string
+): Promise<string> {
+  try {
+    const { searchFiles, listFiles } = await import("@/lib/drive/actions")
+    const rootId = (await import("@/lib/drive/config")).tryGetDriveRootFolderId()
+    if (!rootId) return "Drive workspace folder is not configured."
+
+    const folderName = (args.folderName as string)?.trim()
+    if (!folderName) return "Please provide a folder name to explore."
+
+    const results = await searchFiles(folderName, { pageSize: 10 })
+    const folders = results.files.filter((f) => f.fileType === "folder")
+
+    if (folders.length === 0) {
+      const rootFiles = await listFiles(rootId)
+      const rootFolders = rootFiles.files.filter((f) => f.fileType === "folder")
+      const similar = rootFolders.filter((f) =>
+        f.name.toLowerCase().includes(folderName.toLowerCase())
+      )
+
+      if (similar.length > 0) {
+        const exploreResults = await Promise.all(
+          similar.slice(0, 3).map(async (f) => {
+            const contents = await listFiles(f.id)
+            const fileCount = contents.files.length
+            return `- **${f.name}** (${fileCount} items, id: \`${f.id}\`)`
+          })
+        )
+        return `Folder "${folderName}" not found exactly. Here are similar folders:\n${exploreResults.join("\n")}\n\nAvailable root folders:\n${rootFolders.map((f) => `- ${f.name}`).join("\n")}`
+      }
+
+      return `Folder "${folderName}" not found. Available root folders:\n${rootFolders.map((f) => `- ${f.name}`).join("\n")}`
+    }
+
+    const folder = folders[0]
+    const contents = await listFiles(folder.id)
+    const subfolders = contents.files.filter((f) => f.fileType === "folder")
+    const files = contents.files.filter((f) => f.fileType !== "folder")
+
+    const lines: string[] = []
+    lines.push(`## ${folder.name}`)
+    lines.push("")
+
+    if (subfolders.length > 0) {
+      lines.push("### Subfolders")
+      for (const sf of subfolders) {
+        const subContents = await listFiles(sf.id)
+        lines.push(`- **${sf.name}** (${subContents.files.length} items)`)
+      }
+      lines.push("")
+    }
+
+    if (files.length > 0) {
+      lines.push("### Files")
+      lines.push("| Name | Type | Size | Modified |")
+      lines.push("| --- | --- | --- | --- |")
+      for (const f of files) {
+        const size = f.size != null ? `${(f.size / 1024).toFixed(0)} KB` : "—"
+        const date = new Date(f.modifiedTime).toLocaleDateString()
+        const type = f.mimeType.split("/").pop() ?? ""
+        lines.push(`| ${f.name} | ${type} | ${size} | ${date} |`)
+      }
+      lines.push("")
+    }
+
+    lines.push(`**Summary**: ${subfolders.length} subfolders, ${files.length} files`)
+    return lines.join("\n")
+  } catch (err) {
+    return err instanceof Error ? err.message : "Failed to explore folder"
+  }
+}
+
+async function analyzeWorkspace(
+  _args: Record<string, unknown>,
+  _workspaceId: string,
+  _userId: string
+): Promise<string> {
+  try {
+    const { listFiles } = await import("@/lib/drive/actions")
+    const rootId = (await import("@/lib/drive/config")).tryGetDriveRootFolderId()
+    if (!rootId) return "Drive workspace folder is not configured."
+
+    const lines: string[] = []
+    lines.push("## Workspace Analysis")
+    lines.push("")
+
+    const rootFiles = await listFiles(rootId)
+    const rootFolders = rootFiles.files.filter((f) => f.fileType === "folder")
+    const rootDocuments = rootFiles.files.filter((f) => f.fileType !== "folder")
+
+    lines.push(`**Root contains**: ${rootFolders.length} folders, ${rootDocuments.length} files`)
+    lines.push("")
+
+    let totalFiles = rootDocuments.length
+    let totalFolders = rootFolders.length
+    const allFiles: { name: string; mimeType: string; size: number | null }[] = [...rootDocuments]
+
+    if (rootFolders.length > 0) {
+      lines.push("### Folder Structure")
+      for (const folder of rootFolders) {
+        const contents = await listFiles(folder.id)
+        totalFiles += contents.files.length
+        totalFolders += contents.files.filter((f) => f.fileType === "folder").length
+        allFiles.push(...contents.files)
+        const fileCount = contents.files.filter((f) => f.fileType !== "folder").length
+        const folderCount = contents.files.filter((f) => f.fileType === "folder").length
+        lines.push(`- **${folder.name}/** — ${fileCount} files, ${folderCount} sub-folders`)
+      }
+      lines.push("")
+    }
+
+    const byType: Record<string, number> = {}
+    for (const f of allFiles) {
+      const ext = f.name.includes(".") ? f.name.split(".").pop()!.toUpperCase() : "NONE"
+      byType[ext] = (byType[ext] ?? 0) + 1
+    }
+
+    if (Object.keys(byType).length > 0) {
+      lines.push("### File Types")
+      lines.push("| Type | Count |")
+      lines.push("| --- | --- |")
+      for (const [type, count] of Object.entries(byType).sort((a, b) => b[1] - a[1])) {
+        lines.push(`| ${type} | ${count} |`)
+      }
+      lines.push("")
+    }
+
+    const totalSizeMB = (allFiles.reduce((s, f) => s + (f.size ?? 0), 0) / (1024 * 1024)).toFixed(1)
+    lines.push("### Summary")
+    lines.push(`- **Total files**: ${totalFiles}`)
+    lines.push(`- **Total folders**: ${totalFolders}`)
+    lines.push(`- **Total size**: ${totalSizeMB} MB`)
+    lines.push(`- **Root folders**: ${rootFolders.length}`)
+
+    if (Object.keys(byType).length > 0) {
+      const topType = Object.entries(byType).sort((a, b) => b[1] - a[1])[0]
+      lines.push(`- **Most common type**: ${topType[0]} (${topType[1]} files)`)
+    }
+
+    return lines.join("\n")
+  } catch (err) {
+    return err instanceof Error ? err.message : "Failed to analyze workspace"
+  }
+}
+
+async function summarizeDocuments(
+  args: Record<string, unknown>,
+  _workspaceId: string,
+  _userId: string
+): Promise<string> {
+  try {
+    const { searchFiles } = await import("@/lib/drive/actions")
+    const query = (args.query as string)?.trim()
+    if (!query) return "Please provide a document name or keyword to search for."
+
+    const results = await searchFiles(query, { pageSize: 10 })
+    const documents = results.files.filter(
+      (f) =>
+        f.mimeType === "application/pdf" ||
+        f.mimeType === "text/plain" ||
+        f.mimeType.startsWith("text/") ||
+        f.mimeType.includes("document") ||
+        f.fileType === "document" ||
+        f.fileType === "text" ||
+        f.fileType === "pdf"
+    )
+
+    const otherFiles = results.files.filter((f) => !documents.includes(f))
+
+    const lines: string[] = []
+    lines.push(`## Search Results: "${query}"`)
+    lines.push("")
+
+    if (documents.length > 0) {
+      lines.push("### Documents Found")
+      lines.push("| Name | Type | Size | Modified | Link |")
+      lines.push("| --- | --- | --- | --- | --- |")
+      for (const d of documents) {
+        const size = d.size != null ? `${(d.size / 1024).toFixed(0)} KB` : "—"
+        const date = new Date(d.modifiedTime).toLocaleDateString()
+        const type = d.mimeType.split("/").pop() ?? d.fileType
+        lines.push(`| ${d.name} | ${type} | ${size} | ${date} | [Open](${d.webViewLink}) |`)
+      }
+      lines.push("")
+      lines.push(`**${documents.length} document(s) found.**`)
+    }
+
+    if (otherFiles.length > 0) {
+      lines.push("")
+      lines.push(`**${otherFiles.length} other file(s) found** (not documents — open them in Drive to view).`)
+      for (const f of otherFiles) {
+        lines.push(`- [${f.name}](${f.webViewLink}) (${f.fileType})`)
+      }
+    }
+
+    if (results.files.length === 0) {
+      lines.push("No files found matching your query. Try a different search term.")
+    }
+
+    return lines.join("\n")
+  } catch (err) {
+    return err instanceof Error ? err.message : "Failed to search documents"
+  }
+}
+
 export const TOOL_HANDLERS: Record<string, ToolHandler> = {
   search_tasks: searchTasks,
   search_projects: searchProjects,
@@ -664,6 +912,9 @@ export const TOOL_HANDLERS: Record<string, ToolHandler> = {
   search_drive: searchDrive,
   list_drive_folder_contents: listDriveFolderContents,
   analyze_drive_folder: analyzeDriveFolder,
+  explore_drive_folder: exploreDriveFolder,
+  analyze_workspace: analyzeWorkspace,
+  summarize_documents: summarizeDocuments,
   get_overdue_tasks: getOverdueTasks,
   get_task_summary: getTaskSummary,
   get_user_tasks: getUserTasks,

@@ -50,11 +50,42 @@ Use bold for emphasis on key values (status, priorities).
 - **Marketing** (3 tasks): 1 ✅, 1 ⏳, 1 ❌
 - **Finance** (5 tasks): 2 ✅, 2 ⏳, 1 ⚠️ Overdue
 
+## Drive Folder Analysis
+When a user asks to analyze a Drive folder:
+
+1. Use **search_drive** to find the folder by name within the Aspen Workspace.
+2. If found, use **list_drive_folder_contents** with the folder's ID to get its contents.
+3. For deeper analysis, use **analyze_drive_folder** with the folder name to get a full recursive scan.
+4. Do NOT confirm the folder exists without inspecting its contents first.
+5. Always explore the folder before answering.
+
+For folder analysis responses, use this structure:
+
+### Folder Overview
+- Total files and folders
+- Total size
+- Date range
+
+### Structure
+Show a tree view of the folder hierarchy.
+
+### File Types
+Table showing file type distribution.
+
+### Key Files
+Table of the largest or most recent files.
+
+### Insights
+- Number of files and folders
+- Most common file type
+- Notable observations
+
 ## Rules
 - Use tools to retrieve real data. Do not make up information.
 - When showing tasks, include their status, project, and due date when available.
 - When the user asks "What should I work on today?", check their assigned tasks.
 - When asked "Where is X?", search Drive and tasks.
+- When asked to analyze a folder, always examine its contents before responding. Do not just confirm the folder exists.
 - Keep responses concise and readable.`
 
 export async function processAIRequest(

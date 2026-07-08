@@ -1,4 +1,7 @@
 import type { AITool } from "@/lib/ai/types"
+import type { DriveFile } from "@/lib/drive/types"
+
+const MAX_RECURSION_DEPTH = 5
 
 export const AI_TOOLS: AITool[] = [
   {
@@ -58,13 +61,41 @@ export const AI_TOOLS: AITool[] = [
     type: "function",
     function: {
       name: "search_drive",
-      description: "Search Google Drive files by name.",
+      description: "Search Google Drive files by name within the Aspen Workspace folder.",
       parameters: {
         type: "object",
         properties: {
           query: { type: "string", description: "File name to search for" },
         },
         required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_drive_folder_contents",
+      description: "List all files and folders inside a specific Drive folder. Returns names, types, sizes, and modified dates.",
+      parameters: {
+        type: "object",
+        properties: {
+          folderId: { type: "string", description: "The Drive folder ID to list contents of" },
+        },
+        required: ["folderId"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "analyze_drive_folder",
+      description: "Find a folder by name within Aspen Workspace, then recursively scan its contents and return a structured analysis with folder structure, file types, sizes, and insights.",
+      parameters: {
+        type: "object",
+        properties: {
+          folderName: { type: "string", description: "Name of the folder to analyze" },
+        },
+        required: ["folderName"],
       },
     },
   },
@@ -375,11 +406,264 @@ async function getUserTasks(
     .join("\n")
 }
 
+async function listDriveFolderContents(
+  args: Record<string, unknown>,
+  _workspaceId: string,
+  _userId: string
+): Promise<string> {
+  try {
+    const { listFiles } = await import("@/lib/drive/actions")
+    const folderId = (args.folderId as string) ?? "root"
+    const result = await listFiles(folderId)
+
+    if (result.files.length === 0) return "The folder is empty."
+
+    const folders = result.files.filter((f) => f.fileType === "folder")
+    const files = result.files.filter((f) => f.fileType !== "folder")
+
+    const lines: string[] = []
+
+    if (folders.length > 0) {
+      lines.push("### Folders")
+      for (const f of folders) {
+        lines.push(`- **${f.name}** (id: \`${f.id}\`)`)
+      }
+    }
+
+    if (files.length > 0) {
+      lines.push("### Files")
+      for (const f of files) {
+        const size = f.size != null ? `${(f.size / 1024).toFixed(1)} KB` : "—"
+        const date = f.modifiedTime
+          ? new Date(f.modifiedTime).toLocaleDateString()
+          : "—"
+        lines.push(
+          `- **${f.name}** | Type: ${f.mimeType} | Size: ${size} | Modified: ${date}`
+        )
+      }
+    }
+
+    lines.push(`\nTotal: ${folders.length} folder(s), ${files.length} file(s)`)
+    return lines.join("\n")
+  } catch (err) {
+    return err instanceof Error ? err.message : "Failed to list folder contents"
+  }
+}
+
+async function analyzeDriveFolder(
+  args: Record<string, unknown>,
+  _workspaceId: string,
+  _userId: string
+): Promise<string> {
+  try {
+    const { listFiles } = await import("@/lib/drive/actions")
+    const rootId = (await import("@/lib/drive/config")).tryGetDriveRootFolderId()
+    if (!rootId) return "Drive workspace folder is not configured."
+
+    const folderName = (args.folderName as string)?.trim()
+    if (!folderName) return "Please provide a folder name to analyze."
+
+    const searchResult = await listFiles(rootId)
+
+    const targetFolder = searchResult.files.find(
+      (f) => f.fileType === "folder" && f.name.toLowerCase() === folderName.toLowerCase()
+    )
+
+    if (!targetFolder) {
+      const similar = searchResult.files
+        .filter((f) => f.fileType === "folder" && f.name.toLowerCase().includes(folderName.toLowerCase()))
+        .map((f) => `"${f.name}" (id: \`${f.id}\`)`)
+
+      if (similar.length > 0) {
+        return `Folder "${folderName}" not found. Did you mean one of these?\n${similar.join("\n")}`
+      }
+      return `Folder "${folderName}" not found in the Aspen Workspace.`
+    }
+
+    const result = await recursiveScan(targetFolder.id, 0)
+    const summary = buildFolderAnalysis(targetFolder.name, result)
+
+    return summary
+  } catch (err) {
+    return err instanceof Error ? err.message : "Failed to analyze folder"
+  }
+}
+
+type ScanResult = {
+  files: { name: string; mimeType: string; size: number | null; modifiedTime: string; webViewLink: string }[]
+  folders: { name: string; id: string; children: ScanResult }[]
+  totalFiles: number
+  totalFolders: number
+  totalSize: number
+  oldestFile: string | null
+  newestFile: string | null
+}
+
+async function recursiveScan(
+  folderId: string,
+  depth: number
+): Promise<ScanResult> {
+  if (depth >= MAX_RECURSION_DEPTH) {
+    return { files: [], folders: [], totalFiles: 0, totalFolders: 0, totalSize: 0, oldestFile: null, newestFile: null }
+  }
+
+  const { listFiles } = await import("@/lib/drive/actions")
+  const result = await listFiles(folderId)
+
+  const subfolders = result.files.filter((f) => f.fileType === "folder")
+  const files = result.files.filter((f) => f.fileType !== "folder")
+
+  const scanFiles = files.map((f) => ({
+    name: f.name,
+    mimeType: f.mimeType,
+    size: f.size,
+    modifiedTime: f.modifiedTime,
+    webViewLink: f.webViewLink,
+  }))
+
+  const scannedFolders: ScanResult["folders"] = []
+
+  let totalFiles = scanFiles.length
+  let totalFolders = subfolders.length
+  let totalSize = files.reduce((sum, f) => sum + (f.size ?? 0), 0)
+  let oldestFile: string | null = null
+  let newestFile: string | null = null
+
+  for (const f of files) {
+    if (!oldestFile || f.modifiedTime < oldestFile) oldestFile = f.modifiedTime
+    if (!newestFile || f.modifiedTime > newestFile) newestFile = f.modifiedTime
+  }
+
+  for (const sub of subfolders) {
+    const child = await recursiveScan(sub.id, depth + 1)
+    scannedFolders.push({
+      name: sub.name,
+      id: sub.id,
+      children: child,
+    })
+    totalFiles += child.totalFiles
+    totalFolders += child.totalFolders
+    totalSize += child.totalSize
+    if (child.oldestFile && (!oldestFile || child.oldestFile < oldestFile)) oldestFile = child.oldestFile
+    if (child.newestFile && (!newestFile || child.newestFile > newestFile)) newestFile = child.newestFile
+  }
+
+  return {
+    files: scanFiles,
+    folders: scannedFolders,
+    totalFiles,
+    totalFolders,
+    totalSize,
+    oldestFile,
+    newestFile,
+  }
+}
+
+function buildFolderAnalysis(folderName: string, scan: ScanResult): string {
+  const lines: string[] = []
+
+  lines.push(`## Folder Overview`)
+  lines.push(``)
+  lines.push(`**Folder**: ${folderName}`)
+  lines.push(`**Total items**: ${scan.totalFiles} files, ${scan.totalFolders} sub-folders`)
+  const totalSizeMB = (scan.totalSize / (1024 * 1024)).toFixed(1)
+  lines.push(`**Total size**: ${totalSizeMB} MB`)
+
+  if (scan.oldestFile && scan.newestFile) {
+    lines.push(`**Date range**: ${new Date(scan.oldestFile).toLocaleDateString()} — ${new Date(scan.newestFile).toLocaleDateString()}`)
+  }
+
+  lines.push(``)
+  lines.push(`## Structure`)
+  lines.push(``)
+  lines.push(buildTreeString(folderName, scan, 0))
+
+  const byType: Record<string, number> = {}
+  function countByType(scanned: ScanResult) {
+    for (const f of scanned.files) {
+      const ext = f.name.includes(".") ? f.name.split(".").pop()!.toUpperCase() : "NONE"
+      byType[ext] = (byType[ext] ?? 0) + 1
+    }
+    for (const sub of scanned.folders) {
+      countByType(sub.children)
+    }
+  }
+  countByType(scan)
+
+  if (Object.keys(byType).length > 0) {
+    lines.push(``)
+    lines.push(`## File Types`)
+    lines.push(``)
+    lines.push(`| Type | Count |`)
+    lines.push(`| --- | --- |`)
+    const sorted = Object.entries(byType).sort((a, b) => b[1] - a[1])
+    for (const [type, count] of sorted) {
+      lines.push(`| ${type} | ${count} |`)
+    }
+  }
+
+  if (scan.files.length > 0) {
+    lines.push(``)
+    lines.push(`## Key Files`)
+    lines.push(``)
+    const sorted = [...scan.files].sort((a, b) => (b.size ?? 0) - (a.size ?? 0)).slice(0, 10)
+    lines.push(`| File | Size | Modified |`)
+    lines.push(`| --- | --- | --- |`)
+    for (const f of sorted) {
+      const size = f.size != null ? `${(f.size / 1024).toFixed(0)} KB` : "—"
+      const date = new Date(f.modifiedTime).toLocaleDateString()
+      lines.push(`| ${f.name} | ${size} | ${date} |`)
+    }
+  }
+
+  lines.push(``)
+  lines.push(`## Insights`)
+  lines.push(``)
+  lines.push(`- **${scan.totalFiles}** files across **${scan.totalFolders}** sub-folders`)
+  if (Object.keys(byType).length > 0) {
+    const topType = Object.entries(byType).sort((a, b) => b[1] - a[1])[0]
+    lines.push(`- Most common file type: **${topType[0]}** (${topType[1]} files)`)
+  }
+  if (scan.totalFolders > 0) {
+    lines.push(`- Folder structure has **${scan.totalFolders}** sub-folders at up to **${MAX_RECURSION_DEPTH}** levels deep`)
+  }
+
+  return lines.join("\n")
+}
+
+function buildTreeString(name: string, scan: ScanResult, depth: number): string {
+  const indent = "  ".repeat(depth)
+  const lines: string[] = []
+  const prefix = depth === 0 ? "📁" : "├──"
+  lines.push(`${indent}${prefix} **${name}**/`)
+
+  const allChildren: { name: string; isFolder: boolean }[] = [
+    ...scan.folders.map((f) => ({ name: f.name, isFolder: true })),
+    ...scan.files.map((f) => ({ name: f.name, isFolder: false })),
+  ]
+
+  for (const child of allChildren) {
+    if (child.isFolder) {
+      const folderData = scan.folders.find((f) => f.name === child.name)
+      if (folderData) {
+        const childStr = buildTreeString(child.name, folderData.children, depth + 1)
+        lines.push(childStr)
+      }
+    } else {
+      lines.push(`${indent}  ├── ${child.name}`)
+    }
+  }
+
+  return lines.join("\n")
+}
+
 export const TOOL_HANDLERS: Record<string, ToolHandler> = {
   search_tasks: searchTasks,
   search_projects: searchProjects,
   search_people: searchPeople,
   search_drive: searchDrive,
+  list_drive_folder_contents: listDriveFolderContents,
+  analyze_drive_folder: analyzeDriveFolder,
   get_overdue_tasks: getOverdueTasks,
   get_task_summary: getTaskSummary,
   get_user_tasks: getUserTasks,

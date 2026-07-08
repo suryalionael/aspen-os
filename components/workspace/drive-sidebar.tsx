@@ -4,18 +4,14 @@ import { useState, useEffect } from "react"
 import {
   Folder,
   FolderOpen,
-  Clock,
-  Star,
-  Trash2,
   ChevronRight,
   ChevronDown,
+  Building2,
 } from "lucide-react"
 
 import type { DriveFolderTree } from "@/lib/drive/types"
 import { getFolderTree } from "@/lib/drive/actions"
 import { cn } from "@/lib/utils"
-
-type ViewType = "root" | "recent" | "starred" | "trash"
 
 function FolderTreeItem({
   node,
@@ -81,13 +77,11 @@ function FolderTreeItem({
 export function DriveSidebar({
   currentFolderId,
   onFolderSelect,
-  onViewChange,
-  currentView,
+  onNavigateRoot,
 }: {
   currentFolderId: string | null
   onFolderSelect: (folderId: string) => void
-  onViewChange: (view: ViewType) => void
-  currentView: ViewType
+  onNavigateRoot: () => void
 }) {
   const [folderTree, setFolderTree] = useState<DriveFolderTree[]>([])
 
@@ -95,47 +89,33 @@ export function DriveSidebar({
     getFolderTree().then(setFolderTree).catch(() => {})
   }, [])
 
-  const quickLinks: { type: ViewType; label: string; icon: React.ReactNode }[] = [
-    { type: "root", label: "My Drive", icon: <Folder className="h-4 w-4" /> },
-    { type: "recent", label: "Recent", icon: <Clock className="h-4 w-4" /> },
-    { type: "starred", label: "Starred", icon: <Star className="h-4 w-4" /> },
-    { type: "trash", label: "Trash", icon: <Trash2 className="h-4 w-4" /> },
-  ]
-
   return (
     <aside className="flex w-56 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-border p-3">
-      {quickLinks.map((link) => (
-        <button
-          key={link.type}
-          type="button"
-          onClick={() => onViewChange(link.type)}
-          className={cn(
-            "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
-            currentView === link.type
-              ? "bg-secondary font-medium text-foreground"
-              : "text-muted-foreground/80 hover:bg-secondary/50 hover:text-foreground"
-          )}
-        >
-          {link.icon}
-          <span>{link.label}</span>
-        </button>
-      ))}
+      <button
+        type="button"
+        onClick={onNavigateRoot}
+        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary/50"
+      >
+        <Building2 className="h-4 w-4 text-primary" />
+        <span>Aspen Training Centre</span>
+      </button>
 
-      {folderTree.length > 0 && (
-        <>
-          <div className="my-2 border-t border-border" />
-          <div className="flex flex-col gap-0.5">
-            {folderTree.map((node) => (
-              <FolderTreeItem
-                key={node.id}
-                node={node}
-                currentFolderId={currentFolderId}
-                onSelect={onFolderSelect}
-                depth={0}
-              />
-            ))}
-          </div>
-        </>
+      <div className="my-2 border-t border-border" />
+
+      {folderTree.length > 0 ? (
+        <div className="flex flex-col gap-0.5">
+          {folderTree.map((node) => (
+            <FolderTreeItem
+              key={node.id}
+              node={node}
+              currentFolderId={currentFolderId}
+              onSelect={onFolderSelect}
+              depth={0}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="px-2 text-xs text-muted-foreground">No folders yet</p>
       )}
     </aside>
   )

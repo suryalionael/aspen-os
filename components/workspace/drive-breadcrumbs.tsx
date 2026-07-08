@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronRight, Home } from "lucide-react"
+import { ChevronRight, Building2 } from "lucide-react"
 
 type Breadcrumb = { id: string; name: string }
 
@@ -16,10 +16,10 @@ export function DriveBreadcrumbs({
       <button
         type="button"
         onClick={() => onNavigate("root")}
-        className="flex items-center gap-1 rounded-md px-2 py-1 text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
+        className="flex items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
       >
-        <Home className="h-3.5 w-3.5" />
-        <span>My Drive</span>
+        <Building2 className="h-3.5 w-3.5" />
+        <span>Workspace</span>
       </button>
       {items.map((item) => (
         <span key={item.id} className="flex items-center gap-1">

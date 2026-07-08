@@ -1,6 +1,6 @@
 "use client"
 
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import Image from "next/image"
 
 import { getGoogleAuthUrl, disconnectGoogle } from "@/lib/google/actions"
@@ -12,12 +12,22 @@ export function GoogleConnect({
 }: {
   status: GoogleConnectionStatus
 }) {
+  const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  function handleConnect() {
+  async function handleConnect() {
+    setError(null)
     startTransition(async () => {
-      const url = await getGoogleAuthUrl()
-      window.location.href = url
+      try {
+        const url = await getGoogleAuthUrl()
+        window.location.href = url
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to connect. Check that Google OAuth is configured."
+        )
+      }
     })
   }
 
@@ -73,6 +83,11 @@ export function GoogleConnect({
             {isPending ? "Redirecting…" : "Connect Google account"}
           </Button>
         </>
+      )}
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
       )}
     </div>
   )

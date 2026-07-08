@@ -1,0 +1,5 @@
+export { processAIRequest, getAspenAIModels } from "@/lib/ai/actions"
+export { buildContext } from "@/lib/ai/context"
+export { AI_TOOLS, executeTool } from "@/lib/ai/tools"
+export { getOpenRouterConfig, SUPPORTED_MODELS } from "@/lib/ai/config"
+export type { AIMessage, AIToolCall, AIStreamChunk, AITool, AIContext } from "@/lib/ai/types"

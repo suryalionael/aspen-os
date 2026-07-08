@@ -3,7 +3,7 @@
 import { useState, useRef } from "react"
 import { Upload, File, X, CheckCircle, AlertCircle, Loader2 } from "lucide-react"
 
-import { uploadFile } from "@/lib/drive/actions"
+import { getUploadUrl } from "@/lib/drive/actions"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -12,9 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { cn } from "@/lib/utils"
 
-type UploadState = "idle" | "uploading" | "complete" | "error"
+type UploadState = "idle" | "initiating" | "uploading" | "complete" | "error"
 
 export function UploadDialog({
   open,
@@ -32,6 +31,7 @@ export function UploadDialog({
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const xhrRef = useRef<XMLHttpRequest | null>(null)
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -46,42 +46,73 @@ export function UploadDialog({
   async function handleUpload() {
     if (!selectedFile) return
 
-    setUploadState("uploading")
+    setUploadState("initiating")
     setError(null)
     setProgress(0)
 
-    const interval = setInterval(() => {
-      setProgress((prev) => Math.min(prev + 8, 90))
-    }, 200)
-
     try {
-      const formData = new FormData()
-      formData.append("file", selectedFile)
-      if (currentFolderId) formData.append("parentId", currentFolderId)
-
-      const result = await uploadFile(formData)
-
-      clearInterval(interval)
-      setProgress(100)
+      const result = await getUploadUrl(
+        selectedFile.name,
+        selectedFile.type || "application/octet-stream",
+        selectedFile.size,
+        currentFolderId ?? undefined
+      )
 
       if ("error" in result) {
         setUploadState("error")
         setError(result.error)
-      } else {
-        setUploadState("complete")
-        setTimeout(() => {
-          onOpenChange(false)
-          onUploaded()
-        }, 1200)
+        return
       }
+
+      setUploadState("uploading")
+      setProgress(0)
+
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhrRef.current = xhr
+
+        xhr.upload.addEventListener("progress", (e) => {
+          if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 100)
+            setProgress(pct)
+          }
+        })
+
+        xhr.addEventListener("load", () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            setProgress(100)
+            resolve()
+          } else {
+            let msg = `Upload failed (${xhr.status})`
+            try {
+              const resp = JSON.parse(xhr.responseText)
+              if (resp.error?.message) msg = resp.error.message
+            } catch {}
+            reject(new Error(msg))
+          }
+        })
+
+        xhr.addEventListener("error", () => reject(new Error("Network error during upload")))
+        xhr.addEventListener("abort", () => reject(new Error("Upload cancelled")))
+
+        xhr.open("PUT", result.uploadUrl)
+        xhr.setRequestHeader("Content-Type", selectedFile.type || "application/octet-stream")
+        xhr.send(selectedFile)
+      })
+
+      setUploadState("complete")
+      setTimeout(() => {
+        onOpenChange(false)
+        onUploaded()
+      }, 1200)
     } catch (err) {
-      clearInterval(interval)
       setUploadState("error")
       setError(err instanceof Error ? err.message : "Upload failed")
     }
   }
 
   function reset() {
+    xhrRef.current?.abort()
     setSelectedFile(null)
     setUploadState("idle")
     setProgress(0)
@@ -138,25 +169,34 @@ export function UploadDialog({
                   </button>
                 )}
                 {uploadState === "complete" && (
-                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  <CheckCircle className="h-5 w-5 shrink-0 text-green-500" />
                 )}
                 {uploadState === "error" && (
-                  <AlertCircle className="h-5 w-5 text-destructive" />
+                  <AlertCircle className="h-5 w-5 shrink-0 text-destructive" />
                 )}
               </div>
 
-              {uploadState === "uploading" && (
+              {(uploadState === "initiating" || uploadState === "uploading") && (
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Uploading to workspace…</span>
-                    <span className="font-medium">{progress}%</span>
+                    <span className="text-muted-foreground">
+                      {uploadState === "initiating" ? "Preparing upload…" : `Uploading ${formatSize(selectedFile.size)}`}
+                    </span>
+                    <span className="font-medium">
+                      {uploadState === "initiating" ? "—" : `${progress}%`}
+                    </span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-secondary">
                     <div
-                      className="h-full rounded-full bg-primary transition-all duration-300"
-                      style={{ width: `${progress}%` }}
+                      className="h-full rounded-full bg-primary transition-all duration-200"
+                      style={{ width: `${uploadState === "initiating" ? 5 : progress}%` }}
                     />
                   </div>
+                  {uploadState === "uploading" && selectedFile.size > 0 && (
+                    <p className="text-[10px] text-muted-foreground">
+                      {(selectedFile.size * progress / 100 / (1024 * 1024)).toFixed(1)} MB / {formatSize(selectedFile.size)}
+                    </p>
+                  )}
                 </div>
               )}
 

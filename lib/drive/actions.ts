@@ -332,6 +332,63 @@ export async function starFile(fileId: string, starred: boolean): Promise<void> 
   })
 }
 
+export async function getUploadUrl(
+  fileName: string,
+  mimeType: string,
+  fileSize: number,
+  parentId?: string
+): Promise<{ error: string } | { success: true; uploadUrl: string; fileId: string }> {
+  try {
+    if (!fileName) return { error: "No file name provided" }
+
+    const userId = await getUserId()
+    const token = await getValidAccessToken(userId)
+    if (!token) return { error: "Google account not connected" }
+
+    const targetId = parentId && parentId !== "root" ? parentId : rootFolderId()
+    if (targetId !== rootFolderId()) {
+      const inWorkspace = await isFileInWorkspaceTree(targetId)
+      if (!inWorkspace) {
+        return { error: "Cannot upload outside the Aspen Workspace folder." }
+      }
+    }
+
+    const metadata: Record<string, unknown> = {
+      name: fileName,
+      parents: [targetId],
+    }
+
+    const metadataResponse = await fetch(
+      `${DRIVE_API}/files?fields=${FIELDS}&uploadType=resumable`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "X-Upload-Content-Type": mimeType || "application/octet-stream",
+          "X-Upload-Content-Length": String(fileSize),
+        },
+        body: JSON.stringify(metadata),
+      }
+    )
+
+    if (!metadataResponse.ok) {
+      const err = await metadataResponse.text()
+      let parsed: { error?: { message?: string } } = {}
+      try { parsed = JSON.parse(err) } catch {}
+      return { error: parsed.error?.message ?? `Upload initiation failed (${metadataResponse.status})` }
+    }
+
+    const uploadUrl = metadataResponse.headers.get("location")
+    if (!uploadUrl) return { error: "No upload URL returned" }
+
+    const fileLocation = metadataResponse.headers.get("x-goog-request-received") || ""
+    return { success: true, uploadUrl, fileId: "pending" }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to initiate upload" }
+  }
+}
+
 export async function uploadFile(
   formData: FormData
 ): Promise<{ error: string } | { success: true; file: DriveFile }> {
@@ -373,14 +430,15 @@ export async function uploadFile(
 
     if (!metadataResponse.ok) {
       const err = await metadataResponse.text()
-      return { error: `Failed to start upload: ${err}` }
+      let parsed: { error?: { message?: string } } = {}
+      try { parsed = JSON.parse(err) } catch {}
+      return { error: parsed.error?.message ?? `Upload initiation failed (${metadataResponse.status})` }
     }
 
     const uploadUrl = metadataResponse.headers.get("location")
     if (!uploadUrl) return { error: "No upload URL returned" }
 
     const arrayBuffer = await file.arrayBuffer()
-
     const uploadResponse = await fetch(uploadUrl, {
       method: "PUT",
       headers: {
@@ -392,7 +450,9 @@ export async function uploadFile(
 
     if (!uploadResponse.ok) {
       const err = await uploadResponse.text()
-      return { error: `Upload failed: ${err}` }
+      let parsed: { error?: { message?: string } } = {}
+      try { parsed = JSON.parse(err) } catch {}
+      return { error: parsed.error?.message ?? "Upload failed" }
     }
 
     const fileData: Record<string, unknown> = await uploadResponse.json()

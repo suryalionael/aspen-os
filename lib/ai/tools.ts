@@ -159,6 +159,20 @@ export const AI_TOOLS: AITool[] = [
   {
     type: "function",
     function: {
+      name: "analyze_project",
+      description: "Analyze a project by name. Returns project health status, task completion, overdue items, related files, deadlines, and recommendations. Use this to provide a comprehensive project overview.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectName: { type: "string", description: "Name of the project to analyze" },
+        },
+        required: ["projectName"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "read_document",
       description: "Download and read the actual content of a document from the workspace. Supports TXT, Markdown (reads full text), Google Docs (exports to text), and PDF (returns metadata). Use this when you need to summarize or understand what a document says.",
       parameters: {
@@ -937,6 +951,120 @@ async function summarizeDocuments(
   }
 }
 
+async function analyzeProject(
+  args: Record<string, unknown>,
+  _workspaceId: string,
+  _userId: string
+): Promise<string> {
+  try {
+    const projectName = (args.projectName as string)?.trim()
+    if (!projectName) return "Please provide a project name."
+
+    const { createClient } = await import("@/lib/supabase/server")
+    const supabase = await createClient()
+
+    const { data: projects } = await supabase
+      .from("projects")
+      .select("id, name, status, description, due_date")
+      .ilike("name", `%${projectName}%`)
+      .is("archived_at", null)
+      .limit(5)
+
+    if (!projects || projects.length === 0) {
+      return `Project "${projectName}" not found. Check the project name and try again.`
+    }
+
+    const project = projects[0]
+    const lines: string[] = []
+    lines.push(`## Project Analysis: ${project.name}`)
+    lines.push("")
+
+    const { data: tasks } = await supabase
+      .from("tasks")
+      .select("id, title, status, due_date, priority, assignee_id")
+      .eq("project_id", project.id)
+      .is("archived_at", null)
+
+    const allTasks = tasks ?? []
+    const completed = allTasks.filter((t) => t.status === "done")
+    const overdue = allTasks.filter((t) => t.due_date && t.due_date < new Date().toISOString().split("T")[0] && t.status !== "done")
+    const inProgress = allTasks.filter((t) => t.status === "in_progress")
+    const todo = allTasks.filter((t) => t.status === "todo" || t.status === "backlog")
+    const urgent = allTasks.filter((t) => t.priority === "urgent" && t.status !== "done")
+
+    const pct = allTasks.length > 0 ? Math.round((completed.length / allTasks.length) * 100) : 0
+    let health: string
+    if (overdue.length > 0 || urgent.length > 0) health = "🔴 Risk"
+    else if (pct < 30) health = "🟡 Attention Needed"
+    else health = "🟢 On Track"
+
+    lines.push(`**Health**: ${health}`)
+    if (project.status) lines.push(`**Status**: ${project.status}`)
+    if (project.due_date) lines.push(`**Due**: ${new Date(project.due_date).toLocaleDateString()}`)
+    if (project.description) lines.push(`**Description**: ${project.description}`)
+    lines.push("")
+
+    lines.push("### Progress")
+    lines.push(`| Metric | Value |`)
+    lines.push(`| --- | --- |`)
+    lines.push(`| Total tasks | ${allTasks.length} |`)
+    lines.push(`| ✅ Completed | ${completed.length} (${pct}%) |`)
+    lines.push(`| ⏳ In progress | ${inProgress.length} |`)
+    lines.push(`| ❌ To do | ${todo.length} |`)
+    lines.push(`| ⚠️ Overdue | ${overdue.length} |`)
+    lines.push(`| 🔴 Urgent | ${urgent.length} |`)
+
+    if (overdue.length > 0) {
+      lines.push("")
+      lines.push("### ⚠️ Overdue Tasks")
+      for (const t of overdue) {
+        lines.push(`- **${t.title}** (due: ${new Date(t.due_date!).toLocaleDateString()})`)
+      }
+    }
+
+    // Get AI memories for this project
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user) {
+      const { data: memories } = await supabase
+        .from("ai_memories")
+        .select("type, entity, key, value")
+        .eq("user_id", session.user.id)
+        .or(`entity.ilike.%${projectName}%,key.ilike.%${projectName}%`)
+        .limit(10)
+
+      if (memories && memories.length > 0) {
+        lines.push("")
+        lines.push("### Saved Context")
+        for (const m of memories) {
+          lines.push(`- **${m.entity}**: ${m.key} = ${m.value}`)
+        }
+      }
+    }
+
+    lines.push("")
+    lines.push("### Recommendations")
+    if (overdue.length > 0) {
+      lines.push(`- **${overdue.length} overdue task(s)** — review and reschedule or reprioritize`)
+    }
+    if (todo.length > 0 && completed.length === 0) {
+      lines.push("- **No tasks completed yet** — focus on completing early tasks to build momentum")
+    }
+    if (urgent.length > 0) {
+      lines.push(`- **${urgent.length} urgent task(s)** — address these immediately`)
+    }
+    if (pct > 75) {
+      lines.push("- **Project near completion** — focus on remaining tasks and documentation")
+    }
+    if (completed.length > 0 && overdue.length === 0) {
+      lines.push("- **On track** — continue current pace")
+    }
+
+    return lines.join("\n")
+  } catch (err) {
+    return err instanceof Error ? err.message : "Failed to analyze project"
+  }
+}
+
 async function readDocument(
   args: Record<string, unknown>,
   _workspaceId: string,
@@ -1015,6 +1143,7 @@ export const TOOL_HANDLERS: Record<string, ToolHandler> = {
   analyze_drive_folder: analyzeDriveFolder,
   explore_drive_folder: exploreDriveFolder,
   analyze_workspace: analyzeWorkspace,
+  analyze_project: analyzeProject,
   summarize_documents: summarizeDocuments,
   read_document: readDocument,
   get_overdue_tasks: getOverdueTasks,

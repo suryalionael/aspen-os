@@ -19,7 +19,7 @@ import {
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3"
 const FIELDS =
-  "files(id,name,mimeType,size,modifiedTime,createdTime,owners,lastModifyingUser,iconLink,thumbnailLink,webViewLink,webContentLink,parents,starred,trashed,capabilities)"
+  "id,name,mimeType,size,modifiedTime,createdTime,owners,lastModifyingUser,iconLink,thumbnailLink,webViewLink,webContentLink,parents,starred,trashed,capabilities"
 
 async function getUserId(): Promise<string> {
   const supabase = await createClient()
@@ -28,12 +28,21 @@ async function getUserId(): Promise<string> {
   return data.session.user.id
 }
 
+async function getAuthToken(): Promise<string> {
+  const userId = await getUserId()
+  const token = await getValidAccessToken(userId)
+  if (!token) throw new Error("Google account not connected")
+  return token
+}
+
 async function driveFetch<T>(
   path: string,
   options?: RequestInit & { userId?: string }
 ): Promise<T> {
-  const userId = options?.userId ?? (await getUserId())
-  const token = await getValidAccessToken(userId)
+  const token = options?.userId
+    ? (await getValidAccessToken(options.userId)) ?? ""
+    : await getAuthToken()
+
   if (!token) throw new Error("Google account not connected")
 
   const response = await fetch(`${DRIVE_API}${path}`, {
@@ -59,6 +68,10 @@ async function driveFetch<T>(
     }
 
     throw new Error(`Drive API error: ${parsed.error?.message ?? errorBody}`)
+  }
+
+  if (response.status === 204) {
+    return undefined as T
   }
 
   return response.json()
@@ -119,9 +132,7 @@ async function assertFileInWorkspace(fileId: string): Promise<DriveFile> {
 async function isFileInWorkspaceTree(fileId: string): Promise<boolean> {
   try {
     const rootId = rootFolderId()
-    const userId = await getUserId()
-    const token = await getValidAccessToken(userId)
-    if (!token) return false
+    const token = await getAuthToken()
 
     const response = await fetch(
       `${DRIVE_API}/files/${fileId}?fields=parents,id`,
@@ -156,7 +167,7 @@ export async function listFiles(
   const query = `trashed = false and '${folder}' in parents`
   params.set("q", query)
   params.set("pageSize", String(options?.pageSize ?? 50))
-  params.set("fields", FIELDS)
+  params.set("fields", `files(${FIELDS})`)
   if (options?.pageToken) params.set("pageToken", options.pageToken)
   if (options?.orderBy) params.set("orderBy", options.orderBy)
 
@@ -179,7 +190,7 @@ export async function searchFiles(
   const safeQuery = query.replace(/'/g, "\\'")
   params.set("q", `trashed = false and '${rootId}' in parents and name contains '${safeQuery}'`)
   params.set("pageSize", String(options?.pageSize ?? 50))
-  params.set("fields", FIELDS)
+  params.set("fields", `files(${FIELDS})`)
   if (options?.pageToken) params.set("pageToken", options.pageToken)
 
   const data = await driveFetch<{ files: Record<string, unknown>[]; nextPageToken?: string }>(
@@ -235,18 +246,13 @@ export async function moveFile(fileId: string, newParentId: string): Promise<Dri
 
   await assertFileInWorkspace(fileId)
   const file = await getFile(fileId)
-  const prev = file.parents.join(",")
+  const prevParents = file.parents.join(",")
 
   const data = await driveFetch<Record<string, unknown>>(
-    `/files/${fileId}?fields=${FIELDS}&addParents=${newParentId}&removeParents=${prev}`,
+    `/files/${fileId}?fields=${FIELDS}&addParents=${encodeURIComponent(newParentId)}&removeParents=${encodeURIComponent(prevParents)}`,
     { method: "PATCH" }
   )
   return parseFile(data)
-}
-
-export async function deleteFile(fileId: string): Promise<void> {
-  await assertFileInWorkspace(fileId)
-  await driveFetch(`/files/${fileId}`, { method: "DELETE" })
 }
 
 export async function trashFile(fileId: string): Promise<DriveFile> {
@@ -267,48 +273,8 @@ export async function restoreFile(fileId: string): Promise<DriveFile> {
   return parseFile(data)
 }
 
-export async function listRecentFiles(pageSize = 20): Promise<DriveFileListResponse> {
-  const rootId = rootFolderId()
-  const params = new URLSearchParams({
-    q: `trashed = false and '${rootId}' in parents`,
-    pageSize: String(pageSize),
-    fields: FIELDS,
-    orderBy: "modifiedTime desc",
-  })
-
-  const data = await driveFetch<{ files: Record<string, unknown>[]; nextPageToken?: string }>(
-    `/files?${params.toString()}`
-  )
-
-  return {
-    files: data.files.map(parseFile),
-    nextPageToken: data.nextPageToken ?? null,
-  }
-}
-
-export async function listTrashedFiles(pageSize = 50): Promise<DriveFileListResponse> {
-  const rootId = rootFolderId()
-  const params = new URLSearchParams({
-    q: `trashed = true and '${rootId}' in parents`,
-    pageSize: String(pageSize),
-    fields: FIELDS,
-  })
-
-  const data = await driveFetch<{ files: Record<string, unknown>[]; nextPageToken?: string }>(
-    `/files?${params.toString()}`
-  )
-
-  return {
-    files: data.files.map(parseFile),
-    nextPageToken: data.nextPageToken ?? null,
-  }
-}
-
 export async function getFolderTree(): Promise<DriveFolderTree[]> {
-  const userId = await getUserId()
-  const token = await getValidAccessToken(userId)
-  if (!token) return []
-
+  const token = await getAuthToken()
   const rootId = rootFolderId()
   return buildFolderTree(rootId, token)
 }
@@ -337,31 +303,30 @@ async function buildFolderTree(parentId: string, token: string): Promise<DriveFo
   return folders
 }
 
-export async function getGoogleDriveFileListSnapshot(
-  folderId?: string,
-  pageSize = 100
-): Promise<DriveFileListResponse> {
-  return listFiles(folderId, { pageSize })
-}
-
 export async function getFileDownloadUrl(fileId: string): Promise<string | null> {
   const file = await assertFileInWorkspace(fileId)
   if (file.mimeType === MIME_TYPE_FOLDER) return null
 
-  const exportMap: Record<string, string> = {
+  const token = await getAuthToken()
+
+  const googleTypes: Record<string, string> = {
     [MIME_TYPE_DOCUMENT]: "application/pdf",
     [MIME_TYPE_SPREADSHEET]: "application/pdf",
     [MIME_TYPE_PRESENTATION]: "application/pdf",
   }
 
-  const mimeType = exportMap[file.mimeType]
-  const params = mimeType ? `?mimeType=${encodeURIComponent(mimeType)}` : "?alt=media"
-  return `${DRIVE_API}/files/${fileId}/export${params}`
+  const exportMime = googleTypes[file.mimeType]
+  if (exportMime) {
+    const params = new URLSearchParams({ mimeType: exportMime })
+    return `${DRIVE_API}/files/${fileId}/export?${params.toString()}`
+  }
+
+  return `${DRIVE_API}/files/${fileId}?alt=media&authorization=${encodeURIComponent(`Bearer ${token}`)}`
 }
 
 export async function starFile(fileId: string, starred: boolean): Promise<void> {
   await assertFileInWorkspace(fileId)
-  await driveFetch(`/files/${fileId}`, {
+  await driveFetch(`/files/${fileId}?fields=${FIELDS}`, {
     method: "PATCH",
     body: JSON.stringify({ starred }),
   })
@@ -372,55 +337,57 @@ export async function uploadFile(
 ): Promise<{ error: string } | { success: true; file: DriveFile }> {
   try {
     const file = formData.get("file") as File | null
-    const parentId = (formData.get("parentId") as string) ?? rootFolderId()
-
     if (!file) return { error: "No file provided" }
+
+    const parentId = (formData.get("parentId") as string) ?? rootFolderId()
 
     const userId = await getUserId()
     const token = await getValidAccessToken(userId)
     if (!token) return { error: "Google account not connected" }
 
-    const headers: HeadersInit = { Authorization: `Bearer ${token}` }
-
-    const metadata: Record<string, unknown> = { name: file.name }
-    if (parentId && parentId !== "root") {
-      const targetId = parentId
-      if (targetId !== rootFolderId()) {
-        const inWorkspace = await isFileInWorkspaceTree(targetId)
-        if (!inWorkspace) {
-          return { error: "Cannot upload outside the Aspen Workspace folder." }
-        }
+    const targetId = parentId !== "root" ? parentId : rootFolderId()
+    if (targetId !== rootFolderId()) {
+      const inWorkspace = await isFileInWorkspaceTree(targetId)
+      if (!inWorkspace) {
+        return { error: "Cannot upload outside the Aspen Workspace folder." }
       }
-      metadata.parents = [targetId]
     }
 
-    const metadataResponse = await fetch(`${DRIVE_API}/files?fields=${FIELDS}&uploadType=resumable`, {
-      method: "POST",
-      headers: {
-        ...headers,
-        "Content-Type": "application/json",
-        "X-Upload-Content-Type": file.type || "application/octet-stream",
-        "X-Upload-Content-Length": String(file.size),
-      },
-      body: JSON.stringify(metadata),
-    })
+    const metadata: Record<string, unknown> = {
+      name: file.name,
+      parents: [targetId],
+    }
+
+    const metadataResponse = await fetch(
+      `${DRIVE_API}/files?fields=${FIELDS}&uploadType=resumable`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "X-Upload-Content-Type": file.type || "application/octet-stream",
+        },
+        body: JSON.stringify(metadata),
+      }
+    )
 
     if (!metadataResponse.ok) {
       const err = await metadataResponse.text()
-      return { error: `Failed to initiate upload: ${err}` }
+      return { error: `Failed to start upload: ${err}` }
     }
 
     const uploadUrl = metadataResponse.headers.get("location")
     if (!uploadUrl) return { error: "No upload URL returned" }
 
-    const buffer = Buffer.from(await file.arrayBuffer())
+    const arrayBuffer = await file.arrayBuffer()
+
     const uploadResponse = await fetch(uploadUrl, {
       method: "PUT",
       headers: {
-        "Content-Length": String(buffer.length),
+        "Content-Length": String(arrayBuffer.byteLength),
         "Content-Type": file.type || "application/octet-stream",
       },
-      body: buffer,
+      body: arrayBuffer,
     })
 
     if (!uploadResponse.ok) {

@@ -18,7 +18,7 @@ interface PerfResults {
   jsParseTimings: { url: string; duration: number; decodedSize: number; transferSize: number }[]
   totalJsParseTime: number
   largestChunks: { url: string; duration: number; decodedSize: number }[]
-  reactCommitTiming: Record<string, number> | null
+  reactCommitTiming: Record<string, unknown> | null
   scriptTimings: { url: string; duration: number; transferSize: number; decodedSize: number }[]
   errors: string[]
 }

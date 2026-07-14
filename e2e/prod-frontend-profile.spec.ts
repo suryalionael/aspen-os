@@ -96,13 +96,13 @@ async function profileRoute(
   // ── Collect navigation timing ──────────────────────────────────
   const navTiming = await page.evaluate(() => {
     const n = performance.getEntriesByType("navigation")[0] as any
-    if (!n) return {}
+    if (!n) return {} as Record<string, number>
     return {
       ttfb: n.responseStart - n.fetchStart,
       domInteractive: n.domInteractive - n.fetchStart,
       domContentLoaded: n.domContentLoadedEventEnd - n.fetchStart,
       loadComplete: n.loadEventEnd - n.fetchStart,
-    }
+    } as Record<string, number>
   })
 
   // ── Paint timing ───────────────────────────────────────────────

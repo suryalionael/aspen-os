@@ -165,12 +165,18 @@ test("attachment upload execution chain probe", async ({ page }) => {
         else bodyPreview = `[${typeof b}]`
       }
 
+      const hdr = headers instanceof Headers
+        ? Object.fromEntries(headers.entries())
+        : Array.isArray(headers)
+          ? Object.fromEntries(headers)
+          : (headers as Record<string, string>)
+
       stamp("FETCH", {
         url: url.substring(0, 130),
         method,
-        nextAction: headers["next-action"] || headers["Next-Action"] || "",
-        contentType: (headers["content-type"] || "").substring(0, 50),
-        isMultipart: (headers["content-type"] || "").includes("multipart"),
+        nextAction: hdr["next-action"] || hdr["Next-Action"] || "",
+        contentType: (hdr["content-type"] || "").substring(0, 50),
+        isMultipart: (hdr["content-type"] || "").includes("multipart"),
         bodyPreview: bodyPreview.substring(0, 400),
       })
       return origFetch.call(window, input, init)

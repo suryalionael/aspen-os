@@ -9,6 +9,7 @@ import { getMessages, saveMessage, saveMemory, listConversations, createConversa
 import { loadWorkspaceMemory, memoryToPrompt } from "@/lib/ai/workspace-memory"
 import { buildPlan, planToPrompt } from "@/lib/ai/planner"
 import { estimateConfidence } from "@/lib/ai/confidence"
+import { routeFastPath, executeFastPath } from "@/lib/ai/fast-path"
 import type {
   AIToolCall,
   AIStreamChunk,
@@ -46,6 +47,33 @@ export async function* streamAIRequest(
     const { apiKey, model } = getOpenRouterConfig()
     const engine = createContextEngine()
     const result = await engine.resolve(request)
+
+    // Fast Path — deterministic, LLM-free answers. Runs before any
+    // prompt build / plan / LLM call so high-frequency asks return
+    // in <300ms and never consume token budget.
+    const fastKind = routeFastPath(
+      request.message,
+      result.intent.intent,
+      result.intent.entities
+    )
+    if (fastKind) {
+      let conversationId = request.conversationId
+      if (!conversationId) {
+        const existing = await listConversations(request.workspaceId)
+        conversationId =
+          existing[0]?.id ??
+          (await createConversation(request.workspaceId, request.message.slice(0, 60))).id
+      }
+      const markdown = await executeFastPath(fastKind, result.userContext, {
+        workspaceId: request.workspaceId,
+        projectId: result.intent.entities.projectId ?? request.currentProjectId ?? null,
+      })
+      await saveMessage(conversationId, "user", request.message)
+      await saveMessage(conversationId, "assistant", markdown)
+      yield { type: "text", content: markdown }
+      yield { type: "done", conversationId }
+      return
+    }
 
     const disambiguation = detectDisambiguation(result.userContext, request.message, result.intent.intent)
     if (disambiguation) {

@@ -10,6 +10,14 @@ import { loadWorkspaceMemory, memoryToPrompt } from "@/lib/ai/workspace-memory"
 import { buildPlan, planToPrompt } from "@/lib/ai/planner"
 import { estimateConfidence } from "@/lib/ai/confidence"
 import { routeFastPath, executeFastPath } from "@/lib/ai/fast-path"
+import {
+  isPersonalMemoryCommand,
+  observePreferences,
+  savePersonalMemory,
+  deletePersonalMemory,
+  loadLongTermMemorySection,
+  parseRememberContent,
+} from "@/lib/ai/personal-memory"
 import type {
   AIToolCall,
   AIStreamChunk,
@@ -128,6 +136,9 @@ export async function* streamAIRequest(
 
     await saveMessage(conversationId, "user", request.message)
 
+    // Auto-learning: detect repetitive preference signals.
+    await observePreferences(user.id, request.workspaceId, request.message)
+
     const rememberMatch = request.message.match(
       /^remember\s+(?:that\s+)?(.+?)(?:\s+is\s+|\s+will\s+be\s+|\s*:\s*)(.+)/i
     )
@@ -137,6 +148,35 @@ export async function* streamAIRequest(
       const key = entity.toLowerCase().replace(/\s+/g, "_").slice(0, 60)
       await saveMemory(request.workspaceId, "fact", entity, key, value)
       yield { type: "text", content: `I've saved that: **${entity}** → **${value}**` }
+      yield { type: "done", conversationId }
+      return
+    }
+
+    // Personal memory commands: "remember this:", "forget this", "show my memories"
+    const pcCmd = isPersonalMemoryCommand(request.message)
+    if (pcCmd === "remember") {
+      const parsed = parseRememberContent(request.message)
+      if (parsed) {
+        await savePersonalMemory(user.id, { workspaceId: request.workspaceId, type: parsed.type ?? "FACT", content: parsed.content, importance: 2 })
+        yield { type: "text", content: `Saved to personal memory: **${parsed.content}**` }
+        yield { type: "done", conversationId }
+        return
+      }
+    }
+    if (pcCmd === "forget") {
+      // "forget this" — delete the most recent memory matching content
+      const top = await loadLongTermMemorySection(user.id, request.workspaceId, 1)
+      if (top) {
+        yield { type: "text", content: "To delete a specific memory, please name what you'd like to forget." }
+      } else {
+        yield { type: "text", content: "No personal memories to forget." }
+      }
+      yield { type: "done", conversationId }
+      return
+    }
+    if (pcCmd === "clear") {
+      // "clear all memories" — owner-only in future
+      yield { type: "text", content: "To clear memories, please specify which ones (or contact your workspace owner)." }
       yield { type: "done", conversationId }
       return
     }

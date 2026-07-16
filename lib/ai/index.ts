@@ -77,6 +77,7 @@ export type {
   AspenPermission,
   AspenMember,
   AspenProjectRef,
+  SelectedObject,
   UserContext,
   Intent,
   IntentEntities,

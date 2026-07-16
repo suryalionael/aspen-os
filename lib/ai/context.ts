@@ -1,75 +1,77 @@
-"use server"
-
 import { createClient } from "@/lib/supabase/server"
 
+import { classifyIntent } from "@/lib/ai/intents"
+import { buildContextPackage } from "@/lib/ai/context-builder"
+import { resolveUserContext } from "@/lib/ai/user-context"
+import type {
+  AspenRequest,
+  EngineResult,
+  UserContext,
+} from "@/lib/ai/types"
+
+/**
+ * The Context Engine. Single entry point that wires the four reasoning layers
+ * together for one request:
+ *
+ *   AI Request → resolveUserContext → classifyIntent → buildContextPackage
+ *
+ * It returns an EngineResult (user context + intent + context package) that the
+ * orchestrator in actions.ts feeds into the Prompt Builder and the LLM.
+ */
+export async function runContextEngine(
+  request: AspenRequest
+): Promise<EngineResult> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error("Not authenticated")
+
+  const userContext: UserContext = await resolveUserContext(
+    request.workspaceId,
+    user.id,
+    {
+      projectId: request.currentProjectId,
+      page: request.currentPage,
+      selectedTaskId: request.selectedTaskId,
+      selectedNoteId: request.selectedNoteId,
+      selectedMeetingId: request.selectedMeetingId,
+      selectedMemberId: request.selectedMemberId,
+      selectedSprintId: request.selectedSprintId,
+    }
+  )
+
+  const intent = classifyIntent(request.message, userContext)
+  const contextPackage = await buildContextPackage(intent, userContext)
+
+  return { userContext, intent, contextPackage }
+}
+
+export type ContextEngine = {
+  resolve: (request: AspenRequest) => Promise<EngineResult>
+}
+
+export function createContextEngine(): ContextEngine {
+  return { resolve: runContextEngine }
+}
+
+// ---------------------------------------------------------------------------
+// Backwards-compatible export. Returns a plain-text context snapshot.
+// New callers should use createContextEngine() / runContextEngine().
+// ---------------------------------------------------------------------------
 export async function buildContext(
   workspaceId: string,
   userId: string
 ): Promise<string> {
-  const supabase = await createClient()
-
-  const sections: string[] = []
-
-  const { data: projects } = await supabase
-    .from("projects")
-    .select("id, name, status")
-    .eq("workspace_id", workspaceId)
-    .is("archived_at", null)
-    .limit(10)
-
-  if (projects && projects.length > 0) {
-    sections.push(
-      `Active projects: ${projects.map((p) => `${p.name} (${p.status})`).join(", ")}`
-    )
+  try {
+    const userContext = await resolveUserContext(workspaceId, userId)
+    const projects = userContext.projects.map((p) => p.name).join(", ") || "none"
+    const members = userContext.members.map((m) => m.email).join(", ") || "none"
+    return [
+      `Workspace: ${userContext.workspace.name}`,
+      `Projects: ${projects}`,
+      `Members: ${members}`,
+      `User: ${userContext.user.fullName} (${userContext.user.role})`,
+    ].join("\n")
+  } catch {
+    return ""
   }
-
-  const projectIds = (projects ?? []).map((p) => p.id)
-
-  if (projectIds.length > 0) {
-    const { data: tasks } = await supabase
-      .from("tasks")
-      .select("id, title, status, due_date, assignee_id, priority")
-      .in("project_id", projectIds)
-      .is("archived_at", null)
-      .order("created_at", { ascending: false })
-      .limit(15)
-
-    if (tasks && tasks.length > 0) {
-      const taskLines = tasks.map((t) => {
-        const parts = [`"${t.title}"`, `status: ${t.status}`]
-        if (t.due_date) parts.push(`due: ${t.due_date}`)
-        if (t.priority) parts.push(`priority: ${t.priority}`)
-        return parts.join(", ")
-      })
-      sections.push(`Recent tasks:\n${taskLines.map((l) => `- ${l}`).join("\n")}`)
-    }
-  }
-
-  const { data: members } = await supabase
-    .rpc("get_workspace_members_with_email", {
-      p_workspace_id: workspaceId,
-    })
-
-  if (members && Array.isArray(members)) {
-    sections.push(
-      `Team members: ${(members as { email: string }[]).map((m) => m.email).join(", ")}`
-    )
-  }
-
-  // Load saved memories
-  const { data: memories } = await supabase
-    .from("ai_memories")
-    .select("type, entity, key, value")
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", userId)
-    .limit(50)
-
-  if (memories && memories.length > 0) {
-    const memoryLines = memories.map(
-      (m) => `- [${m.type}] ${m.entity}: ${m.key} = ${m.value}`
-    )
-    sections.push(`Saved memories:\n${memoryLines.join("\n")}`)
-  }
-
-  return sections.join("\n\n")
 }

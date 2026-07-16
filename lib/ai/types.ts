@@ -133,6 +133,7 @@ export type Intent =
   | "status_report"
   | "search"
   | "action_request"
+  | "brainstorm"
   | "general_chat"
 
 export type IntentEntities = {

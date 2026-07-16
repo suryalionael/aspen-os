@@ -13,6 +13,13 @@ const STATUSES = ["backlog", "todo", "in_progress", "done"]
 // Keyword → intent scoring table. Deterministic and fast; no LLM call needed
 // to decide what the user is asking about. The LLM still does the reasoning.
 const INTENT_KEYWORDS: Record<Intent, string[]> = {
+  brainstorm: [
+    "brainstorm", "ideas", "creative", "think outside", "imagine",
+    "what if we", "what would happen if", "suggest some", "come up with",
+    "innovation", "innovate", "inspire", "inspiring", "help me think",
+    "generate ideas", "10 ideas", "concept", "concepts", "possibilities",
+    "reimagine", "rethink", "blue sky", "blue-sky",
+  ],
   action_request: [
     "assign", "reassign", "unassign", "create", "add task", "new task",
     "reschedule", "move task", "update task", "delete task", "remove task",
@@ -154,6 +161,7 @@ export function classifyIntent(message: string, ctx: UserContext): IntentResult 
     status_report: 0,
     search: 0,
     action_request: 0,
+    brainstorm: 0,
     general_chat: 0,
   }
 

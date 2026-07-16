@@ -40,7 +40,7 @@ export async function runContextEngine(
   )
 
   const intent = classifyIntent(request.message, userContext)
-  const contextPackage = await buildContextPackage(intent, userContext)
+  const contextPackage = await buildContextPackage(intent, userContext, request.message)
 
   return { userContext, intent, contextPackage }
 }

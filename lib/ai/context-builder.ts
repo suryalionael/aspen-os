@@ -7,6 +7,7 @@ import {
   loadPreferenceSection,
   loadLongTermMemorySection,
 } from "@/lib/ai/personal-memory"
+import { searchSimilar } from "@/lib/ai/embeddings"
 import {
   buildWorkspaceGraph,
   graphBlockedTasks,
@@ -361,7 +362,8 @@ async function fetchProjectDetail(
  */
 export async function buildContextPackage(
   intent: IntentResult,
-  ctx: UserContext
+  ctx: UserContext,
+  message?: string
 ): Promise<ContextPackage> {
   const supabase = await createClient()
   const userId = ctx.user.id
@@ -751,6 +753,34 @@ export async function buildContextPackage(
     if (prefs) sections.push({ title: "User preferences", content: prefs })
     const memories = await loadLongTermMemorySection(ctx.user.id, ctx.workspace.id)
     if (memories) sections.push({ title: "Personal memories", content: memories })
+  }
+
+  // Semantic knowledge — hybrid (SQL + vector) retrieval for reasoning intents.
+  if (level !== "L0" && level !== "L1" && message && message.trim().length > 0) {
+    try {
+      const knowledge = await searchSimilar({
+        workspaceId: ctx.workspace.id,
+        query: message,
+        projectId: projectId ?? undefined,
+        topK: 6,
+        minSimilarity: 0.5,
+      })
+      if (knowledge.length > 0) {
+        const lines = knowledge.map(
+          (k) =>
+            `- (${k.similarity.toFixed(2)}) **${k.sourceType}** — ` +
+            k.content.slice(0, 200).replace(/\n/g, " ") +
+            (k.content.length > 200 ? "…" : "") +
+            ` [source: ${k.sourceType}#${k.sourceId.slice(0, 8)}]`
+        )
+        sections.push({
+          title: "Relevant knowledge",
+          content: lines.join("\n"),
+        })
+      }
+    } catch {
+      // Embedding API may be unavailable; silently skip.
+    }
   }
 
   const scope = describeScope(intent, ctx, projectId)

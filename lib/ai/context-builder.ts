@@ -3,6 +3,11 @@ import { createClient } from "@/lib/supabase/server"
 import { memberEmailById } from "@/lib/ai/user-context"
 import { sortTasksByPriority, contextLevelFor } from "@/lib/ai/priority"
 import {
+  loadProfileSection,
+  loadPreferenceSection,
+  loadLongTermMemorySection,
+} from "@/lib/ai/personal-memory"
+import {
   buildWorkspaceGraph,
   graphBlockedTasks,
   graphDueTodayTasks,
@@ -734,6 +739,18 @@ export async function buildContextPackage(
       }
       break
     }
+  }
+
+  // Personal Memory sections — injected only for LLM-bound intents.
+  // Profile is lightweight (one row) and always loaded.
+  const level = contextLevelFor(intent, ctx)
+  const profile = await loadProfileSection(ctx.user.id, ctx.workspace.id)
+  if (profile) sections.push({ title: "User profile", content: profile })
+  if (level !== "L0" && level !== "L1") {
+    const prefs = await loadPreferenceSection(ctx.user.id, ctx.workspace.id)
+    if (prefs) sections.push({ title: "User preferences", content: prefs })
+    const memories = await loadLongTermMemorySection(ctx.user.id, ctx.workspace.id)
+    if (memories) sections.push({ title: "Personal memories", content: memories })
   }
 
   const scope = describeScope(intent, ctx, projectId)

@@ -15,6 +15,7 @@ function e(over: Partial<IntentEntities> = {}): IntentEntities {
     dateValue: null,
     temporal: null,
     keywords: [],
+    selectedRef: null,
     ...over,
   }
 }

@@ -84,12 +84,22 @@ export function AspenAIPanel({
   workspaceSlug,
   currentProjectId,
   currentPage,
+  selectedTaskId,
+  selectedNoteId,
+  selectedMeetingId,
+  selectedMemberId,
+  selectedSprintId,
   onClose,
 }: {
   workspaceId: string
   workspaceSlug: string
   currentProjectId?: string | null
   currentPage?: string | null
+  selectedTaskId?: string | null
+  selectedNoteId?: string | null
+  selectedMeetingId?: string | null
+  selectedMemberId?: string | null
+  selectedSprintId?: string | null
   onClose: () => void
 }) {
   const [messages, setMessages] = useState<Message[]>([
@@ -195,6 +205,11 @@ export function AspenAIPanel({
           workspaceSlug,
           currentProjectId,
           currentPage,
+          selectedTaskId,
+          selectedNoteId,
+          selectedMeetingId,
+          selectedMemberId,
+          selectedSprintId,
           conversationId: convId ?? undefined,
         },
         onChunk
@@ -266,6 +281,11 @@ export function AspenAIPanel({
       workspaceSlug: string
       currentProjectId?: string | null
       currentPage?: string | null
+      selectedTaskId?: string | null
+      selectedNoteId?: string | null
+      selectedMeetingId?: string | null
+      selectedMemberId?: string | null
+      selectedSprintId?: string | null
       conversationId?: string
     },
     onChunk: (chunk: AIStreamChunk) => void

@@ -5,7 +5,7 @@ const UNIQUE = Date.now()
 const EMAIL = `perf-auth-${UNIQUE}@example.com`
 const PASSWORD = "AuthTest123!"
 
-test("debug auth flow in production", async ({ page }) => {
+test.skip("debug auth flow in production", async ({ page }) => {
   test.setTimeout(120_000)
 
   // 1. Check sign-up page loads

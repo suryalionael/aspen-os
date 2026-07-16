@@ -110,14 +110,14 @@ test("audit log records task/project/workspace/membership events, survives task 
   await expect(ownerPage.getByRole("dialog", { name: "Audit log" })).toBeVisible()
 
   const entries = ownerPage.getByTestId("audit-log-entry")
-  await expect(entries.filter({ hasText: "Invitation created" })).toBeVisible()
-  await expect(entries.filter({ hasText: "Invitation accepted" })).toBeVisible()
-  await expect(entries.filter({ hasText: "Role changed" })).toBeVisible()
-  await expect(entries.filter({ hasText: "Project renamed" })).toBeVisible()
-  await expect(entries.filter({ hasText: "Task created" })).toBeVisible()
-  await expect(entries.filter({ hasText: "Task commented" })).toBeVisible()
-  await expect(entries.filter({ hasText: "Task deleted" })).toBeVisible()
-  await expect(entries.filter({ hasText: "Workspace renamed" })).toBeVisible()
+  await expect(entries.filter({ hasText: "Invitation created" })).toHaveCount(1, { timeout: 10000 })
+  await expect(entries.filter({ hasText: "Invitation accepted" })).toHaveCount(1)
+  await expect(entries.filter({ hasText: "Role changed" })).toHaveCount(1)
+  await expect(entries.filter({ hasText: "Project renamed" })).toHaveCount(1)
+  await expect(entries.filter({ hasText: "Task created" })).toHaveCount(1)
+  await expect(entries.filter({ hasText: "Task commented" })).toHaveCount(1)
+  await expect(entries.filter({ hasText: "Task deleted" })).toHaveCount(1, { timeout: 15000 })
+  await expect(entries.filter({ hasText: "Workspace renamed" })).toHaveCount(1)
 
   // --- Filter by action narrows the list ---
   await ownerPage.getByLabel("Action").selectOption({ label: "Task deleted" })

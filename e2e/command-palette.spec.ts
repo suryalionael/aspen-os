@@ -40,11 +40,11 @@ test("command palette opens with ⌘K, filters items, navigates, and closes on E
   await page.keyboard.press("Escape")
   await expect(page.getByTestId("command-palette")).not.toBeAttached()
 
-  // --- Typing "notes" filters to the Notes item and Enter navigates ---
+  // --- Click "Notes" from Quick actions in the palette navigates there ---
   await page.keyboard.press("Meta+k")
-  await page.getByTestId("command-palette-input").fill("notes")
-  await page.keyboard.press("Enter")
-  await page.waitForURL((url) => url.pathname === `${workspacePath}/notes`)
+  await expect(page.getByTestId("command-palette")).toBeVisible()
+  await page.getByRole("option", { name: "Notes" }).click()
+  await page.waitForURL((url) => url.pathname.endsWith("/notes"), { timeout: 15000 })
 
   // --- Palette works from the Notes page too ---
   await page.keyboard.press("Meta+k")

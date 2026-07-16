@@ -98,6 +98,50 @@ Rules: skip any section with no data (write "_None_"). Never write long
 paragraphs. Use badges: ✅ done · 🟡 in progress · ⬜ todo · ⚠️ overdue ·
 🔴 urgent · 🟠 high.`
 
+export const STRATEGIC_PLANNING_TEMPLATE = `## Strategic planning response format
+When asked for planning advice (what to work on, how to finish a sprint,
+what are my biggest risks, am I overloaded) use this exact structure:
+
+**Executive Summary**
+One paragraph describing the overall situation.
+
+**Today's Priorities**
+| Priority | Task | Why |
+| --- | --- | --- |
+
+**Risks**
+| Level | Description | Impact |
+| --- | --- | --- |
+
+**Suggested Plan**
+| Time | Work | Effort |
+| --- | --- | --- |
+
+**Why This Order**
+Explain the reasoning — dependencies, deadlines, blocking, quick wins.
+
+**Optional Improvements**
+- delegate low-priority items
+- merge related tasks
+- reschedule at-risk work
+- create follow-up subtasks`
+
+export const BRAINSTORM_TEMPLATE = `## Brainstorm response format
+For creative ideation use this structure:
+
+**Thesis**
+What we are solving for.
+
+**Ideas**
+| # | Idea | Pros | Cons |
+| --- | --- | --- | --- |
+
+**Recommendation**
+One or two ideas worth pursuing.
+
+**Next Steps**
+Concrete next actions.`
+
 export function insightsToRisksMarkdown(insights: PredictiveInsight[]): string {
   if (!insights.length) return "_None_"
   const lines = ["| Level | Description |", "| --- | --- |"]

@@ -10,6 +10,8 @@ import {
   RESPONSE_FORMATTER_V2,
   EXPLAINABILITY_GUIDANCE,
   insightsToRisksMarkdown,
+  STRATEGIC_PLANNING_TEMPLATE,
+  BRAINSTORM_TEMPLATE,
 } from "@/lib/ai/response"
 
 // Renders the structured context package into a single markdown block the
@@ -80,6 +82,13 @@ DO NOT ask "which John?". Instead list the candidates with enough context
 (role/email/project) for the user to pick quickly. If truly ambiguous, present
 2–4 options and ask them to choose.`
 
+const BRAINSTORM_MODE = `## Brainstorming mode
+This is a creative ideation session. The goal is NOT to provide a data-grounded
+answer from the workspace — use workspace context to inform but do not be
+constrained by it. Produce structured, thoughtful, original ideas. Use tables
+or bulleted lists. Include trade-offs and risks for each option. Be ambitious
+but grounded — no "magic solution" clichés.`
+
 const CONFIDENCE = `## Confidence
 Before answering, internally estimate your confidence (High / Medium / Low).
 If Low, state exactly what is missing — never hallucinate to fill the gap.
@@ -134,8 +143,19 @@ export function buildSystemPrompt(result: EngineResult, opts?: PromptOptions): s
     parts.push("", `## Internal confidence: ${opts.confidence.level.toUpperCase()} (${opts.confidence.score})`)
   }
 
-  parts.push("", BEHAVIOR, "", PM_MODE, "", PREDICTIVE, "", DISAMBIGUATION, "", CONFIDENCE, "", PLANNING)
-  parts.push("", RESPONSE_FORMATTER_V2, "", EXPLAINABILITY_GUIDANCE)
+  const intent = result.intent.intent
+  parts.push("", BEHAVIOR, "")
+  if (intent === "brainstorm") {
+    parts.push(BRAINSTORM_MODE, "", DISAMBIGUATION, "", CONFIDENCE)
+    parts.push("", BRAINSTORM_TEMPLATE)
+  } else {
+    parts.push(PM_MODE, "", PREDICTIVE, "", DISAMBIGUATION, "", CONFIDENCE, "", PLANNING)
+    if (intent === "planning" || intent === "risk_analysis" || intent === "action_request") {
+      parts.push("", STRATEGIC_PLANNING_TEMPLATE)
+    } else {
+      parts.push("", RESPONSE_FORMATTER_V2, "", EXPLAINABILITY_GUIDANCE)
+    }
+  }
 
   return parts.join("\n")
 }
